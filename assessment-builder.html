@@ -174,7 +174,7 @@ tr:hover td{background:#fafbff}
 <script>
 /* ── CONFIG — update these three values ── */
 const SUPABASE_URL      = 'https://owouiukkteoentgpbrlk.supabase.co';
-const SUPABASE_ANON_KEY = 'PASTE_YOUR_ANON_KEY_HERE';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93b3VpdWtrdGVvZW50Z3BicmxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjQxNzcsImV4cCI6MjA5NTM0MDE3N30.NOPj0iARb1bExfBv2t8KvFktLTisp2OPE95dM_C7TJw';
 const APP_URL           = 'https://assessments.vitalspark.ai';
 </script>
 </head>
@@ -1690,24 +1690,50 @@ async function initAuth(){
   }
   _sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{flowType:'pkce',detectSessionInUrl:true,autoRefreshToken:true,persistSession:true}});
   _sb.auth.onAuthStateChange(async(event,session)=>{
-    if(event==='SIGNED_IN'||event==='TOKEN_REFRESHED'){
+    // Handle all events that carry a valid session
+    if(session&&(event==='SIGNED_IN'||event==='TOKEN_REFRESHED'||event==='INITIAL_SESSION')){
       _session=session;
+      // On callback URL — do a full redirect to / so INITIAL_SESSION fires cleanly
+      if(window.location.pathname.includes('callback')){
+        window.location.href='/';
+        return;
+      }
       _userEmail=session.user.email||'';
       _userName=session.user.user_metadata?.full_name||session.user.user_metadata?.name||_userEmail;
-      if(window.location.pathname.includes('callback')){window.history.replaceState({},'','/');}
       try{
         _tenantId=await ensureTenant();
         showLoading();
         await loadAll();
         render();
-      }catch(e){console.error(e);toast('Failed to load data: '+e.message,'err');}
-    }else if(event==='SIGNED_OUT'){
+      }catch(e){
+        console.error('App load error:',e);
+        document.getElementById('app').innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-family:system-ui,sans-serif;color:#64748b;text-align:center;padding:40px">
+          <i class="ti ti-alert-circle" style="font-size:40px;color:#ef4444"></i>
+          <h2 style="color:#1e293b;font-size:18px">Failed to load</h2>
+          <p style="font-size:14px">${e.message}</p>
+          <button onclick="location.reload()" style="margin-top:8px;padding:8px 18px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">Retry</button>
+        </div>`;
+      }
+    }else if(event==='SIGNED_OUT'||(!session&&event==='INITIAL_SESSION')){
       _session=null;_tenantId=null;
       document.getElementById('app').innerHTML=rLogin();
     }
   });
+  // Also check for existing session on page load (handles refresh)
   const{data:{session}}=await _sb.auth.getSession();
-  if(!session){document.getElementById('app').innerHTML=rLogin();}
+  if(session){
+    _session=session;
+    _userEmail=session.user.email||'';
+    _userName=session.user.user_metadata?.full_name||session.user.user_metadata?.name||_userEmail;
+    try{
+      _tenantId=await ensureTenant();
+      showLoading();
+      await loadAll();
+      render();
+    }catch(e){console.error('Initial load error:',e);}
+  }else if(!window.location.pathname.includes('callback')){
+    document.getElementById('app').innerHTML=rLogin();
+  }
 }
 
 function showLoading(){
