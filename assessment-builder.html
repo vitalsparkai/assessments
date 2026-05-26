@@ -149,11 +149,12 @@ tr:hover td{background:#fafbff}
 .rank-item.drag-over{border-style:dashed;opacity:.65}
 .rank-item.dragging{opacity:.3}
 .rank-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
-.rank-hdl{font-size:18px;opacity:.35;flex-shrink:0;line-height:1}
-.rank-txt{flex:1;font-size:14px;font-weight:500}
-.rank-arr{display:flex;flex-direction:column;gap:2px;flex-shrink:0}
-.rarr{background:transparent;border:none;cursor:pointer;padding:2px 4px;opacity:.35;font-size:12px;border-radius:4px}
-.rarr:hover:not(:disabled){opacity:1;background:rgba(0,0,0,.07)}.rarr:disabled{opacity:.12;cursor:not-allowed}
+.rank-hdl{font-size:18px;opacity:.35;flex-shrink:0;line-height:1;pointer-events:none}
+.rank-txt{flex:1;font-size:14px;font-weight:500;pointer-events:none}
+.rank-arr{display:flex;flex-direction:column;gap:1px;pointer-events:none}
+.rarr{background:none;border:none;cursor:pointer;padding:2px 4px;line-height:1;border-radius:3px;color:inherit;opacity:.5;font-size:13px;pointer-events:all}
+.rarr:hover:not(:disabled){background:rgba(0,0,0,.08);opacity:1}
+.rarr:disabled{opacity:.15;cursor:default}
 .cw{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:48px 20px}
 .ci{max-width:660px;width:100%}
 .dr{border-radius:12px;padding:20px;margin-bottom:10px;border:1px solid var(--border);background:var(--surface)}
@@ -434,11 +435,36 @@ async function fireWH(asm,resp,dims){
 const S={view:'home',asmId:null,tab:'gen',answers:{},contact:{},step:0,preview:false,doneResp:null,modal:null,expandedSecs:{},shuffledOrders:{}};
 let _drag=null;
 
-function dSt(e,qId,optId){_drag={qId,optId};e.dataTransfer.effectAllowed='move';document.querySelector(`[data-opt="${optId}"]`)?.classList.add('dragging');}
-function dOv(e,qId,optId){e.preventDefault();e.dataTransfer.dropEffect='move';document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over'));document.querySelector(`[data-opt="${optId}"]`)?.classList.add('drag-over');}
-function dDr(e,qId,targetId){e.preventDefault();document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over','dragging'));if(!_drag||_drag.optId===targetId){_drag=null;return;}const order=[...(S.answers[qId]||[])];const fi=order.indexOf(_drag.optId),ti=order.indexOf(targetId);if(fi<0||ti<0){_drag=null;return;}order.splice(fi,1);order.splice(ti,0,_drag.optId);S.answers[qId]=order;_drag=null;render();}
+function dSt(e,qId,optId){
+  _drag={qId,optId};
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',optId);
+  setTimeout(()=>{document.querySelector('[data-opt="'+optId+'"]')?.classList.add('dragging');},0);
+}
+function dOv(e,qId,optId){
+  e.preventDefault();e.stopPropagation();
+  e.dataTransfer.dropEffect='move';
+  document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over'));
+  document.querySelector('[data-opt="'+optId+'"]')?.classList.add('drag-over');
+}
+function dDr(e,qId,targetId){
+  e.preventDefault();e.stopPropagation();
+  document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over','dragging'));
+  if(!_drag||_drag.optId===targetId||_drag.qId!==qId){_drag=null;return;}
+  const order=[...(S.answers[qId]||[])];
+  const fi=order.indexOf(_drag.optId),ti=order.indexOf(targetId);
+  if(fi<0||ti<0){_drag=null;return;}
+  order.splice(fi,1);order.splice(ti,0,_drag.optId);
+  S.answers[qId]=order;_drag=null;render();
+}
 function dEnd(){document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over','dragging'));_drag=null;}
-function mvRk(qId,optId,dir){const order=[...(S.answers[qId]||[])];const i=order.indexOf(optId),j=i+dir;if(j<0||j>=order.length)return;[order[i],order[j]]=[order[j],order[i]];S.answers[qId]=order;render();}
+function mvRk(qId,optId,dir){
+  const order=[...(S.answers[qId]||[])];
+  const i=order.indexOf(optId),j=i+dir;
+  if(i<0||j<0||j>=order.length)return;
+  [order[i],order[j]]=[order[j],order[i]];
+  S.answers[qId]=order;render();
+}
 
 /* ══ RENDER ══ */
 function seededShuffle(arr, seed) {
@@ -735,6 +761,7 @@ function rQ(q,b,cr,br){
           return `<div class="rank-item" data-opt="${optId}" draggable="true"
             ondragstart="dSt(event,'${q.id}','${optId}')" ondragover="dOv(event,'${q.id}','${optId}')"
             ondrop="dDr(event,'${q.id}','${optId}')" ondragend="dEnd()"
+            ondragleave="this.classList.remove('drag-over')"
             style="border-color:${idx===0?b.primaryColor:b.borderColor};background:${idx===0?b.primaryColor+'14':b.surfaceColor}">
             <div class="rank-num" style="background:${idx===0?b.primaryColor:b.borderColor};color:${idx===0?'#fff':b.textColor}">${idx+1}</div>
             <div class="rank-hdl" style="color:${b.textColor}">\u2807</div>
