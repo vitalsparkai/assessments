@@ -1,0 +1,1721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assessment Builder</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f8fafc;--surface:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;--primary:#2563eb;--ph:#1d4ed8;--ok:#059669;--err:#dc2626;--sb:#0f172a;--r:8px}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:220px;background:var(--sb);color:#94a3b8;flex-shrink:0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar-logo{padding:18px 16px;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px;color:#e2e8f0;font-weight:700;font-size:14px}
+.sidebar-logo i{font-size:18px;color:var(--primary)}
+.sidebar-nav{padding:10px;flex:1}
+.si{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;transition:background .12s,color .12s;margin-bottom:2px}
+.si:hover,.si.on{background:rgba(255,255,255,.09);color:#e2e8f0}
+.s-foot{padding:14px 16px;border-top:1px solid #1e293b;font-size:11px;color:#475569}
+.main{flex:1;overflow:auto}
+.content{padding:24px;max-width:1100px}
+.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;gap:12px;flex-wrap:wrap}
+.ph h1{font-size:20px;font-weight:700}
+.ph-sub{font-size:13px;color:var(--muted);margin-top:3px}
+.fx{display:flex}.ic{align-items:center}.jb{justify-content:space-between}
+.g1{gap:4px}.g2{gap:8px}.g3{gap:12px}.f1{flex:1}
+.mt1{margin-top:4px}.mt2{margin-top:8px}.mt3{margin-top:12px}.mt4{margin-top:16px}
+.mb1{margin-bottom:4px}.mb2{margin-bottom:8px}.mb3{margin-bottom:12px}.mb4{margin-bottom:16px}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;transition:background .12s;border:1px solid transparent;font-family:inherit;white-space:nowrap}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.bp{background:var(--primary);color:#fff;border-color:var(--primary)}.bp:hover:not(:disabled){background:var(--ph)}
+.bs{background:transparent;color:var(--text);border-color:var(--border)}.bs:hover:not(:disabled){background:var(--bg)}
+.bg{background:transparent;color:var(--muted);border-color:transparent}.bg:hover:not(:disabled){background:var(--bg);color:var(--text)}
+.bd{background:transparent;color:var(--err);border-color:transparent}.bd:hover:not(:disabled){background:#fef2f2}
+.bsm{padding:4px 9px;font-size:12px}.bic{padding:5px 7px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.ctit{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:6px}
+.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+.acard{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;transition:border-color .15s,box-shadow .15s}
+.acard:hover{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.07)}
+.bdg{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.bpub{background:#d1fae5;color:#065f46}.bdft{background:#f1f5f9;color:#475569}
+.bbl{background:#dbeafe;color:#1e40af}.byw{background:#fef3c7;color:#92400e}.bpur{background:#ede9fe;color:#5b21b6}
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:22px;overflow-x:auto}
+.tab{padding:9px 14px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:5px;transition:color .12s,border-color .12s}
+.tab.on{color:var(--primary);border-bottom-color:var(--primary)}.tab:hover:not(.on){color:var(--text)}
+.fg{margin-bottom:14px}
+.fg label,.fgl{display:block;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:5px}
+input[type=text],input[type=url],input[type=email],input[type=number],input[type=tel],textarea,select{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--r);font-size:13.5px;font-family:inherit;color:var(--text);background:var(--surface);outline:none;transition:border-color .12s,box-shadow .12s}
+input:focus,textarea:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+input[type=number]{-moz-appearance:textfield}
+textarea{resize:vertical;min-height:72px}
+input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--border);border-radius:2px;outline:none;border:none;padding:0;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--primary);cursor:pointer}
+input[type=color]{width:38px;height:36px;padding:2px;border:1px solid var(--border);border-radius:6px;cursor:pointer}
+.crow{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+/* SECTIONS */
+.sec-wrap{margin-bottom:14px;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.sec-head{display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--bg);border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+.sec-head:hover{background:#f1f5f9}
+.sec-caret{font-size:13px;color:var(--muted);transition:transform .2s;flex-shrink:0}
+.sec-caret.open{transform:rotate(90deg)}
+.sec-title{font-size:13.5px;font-weight:600;flex:1}
+.sec-dimtags{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.dim-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600;background:var(--bg);border:1px solid var(--border)}
+.sec-body{padding:10px}
+.sec-empty{text-align:center;padding:16px;color:var(--muted);font-size:13px}
+.ungrouped{border:1px dashed var(--border);border-radius:12px;margin-bottom:14px;overflow:hidden}
+.ungrouped-head{padding:10px 14px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--bg)}
+/* QUESTION ITEMS */
+.qi{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface);margin-bottom:6px}
+.qi-ico{width:28px;height:28px;border-radius:6px;background:#eff6ff;display:flex;align-items:center;justify-content:center;color:var(--primary);flex-shrink:0;font-size:14px}
+.qi-inf{flex:1;min-width:0}
+.qi-tit{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qi-sub{font-size:11px;color:var(--muted)}
+.qi-act{display:flex;gap:3px}
+/* SCORE ROWS (option dimension scoring) */
+.score-row{display:flex;align-items:center;gap:7px;padding:6px 10px;background:var(--bg);border-radius:7px;margin-bottom:5px}
+.score-row select{flex:1;min-width:0;font-size:13px;padding:5px 8px}
+.score-row input[type=number]{width:70px;flex-shrink:0;font-size:13px;padding:5px 8px;text-align:center}
+/* POSITION WEIGHTS */
+.pw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:8px}
+.pw-item{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center}
+.pw-label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.pw-item input{text-align:center;font-size:16px;font-weight:700;border:none;background:transparent;padding:2px;outline:none;color:var(--primary)}
+/* OPTION BLOCK */
+.opt-block{border:1px solid var(--border);border-radius:9px;padding:12px;margin-bottom:8px;background:var(--surface)}
+.opt-block-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.opt-block-num{width:22px;height:22px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:9px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--border);background:var(--bg);white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafbff}
+.rrow{display:grid;grid-template-columns:68px 68px 110px 1fr 1fr auto;gap:8px;align-items:flex-end;padding:10px 12px;background:var(--bg);border-radius:8px;margin-bottom:6px}
+.rrow .fg{margin-bottom:0}
+.cfr{display:flex;gap:7px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:8px;margin-bottom:5px;background:var(--bg)}
+.cfr input{flex:2}.cfr select{flex:1}
+.ib{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:13px;color:#1e40af;margin-bottom:14px;display:flex;align-items:flex-start;gap:7px}
+.sgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.scard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.slbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px}
+.sval{font-size:24px;font-weight:700}.sval.grn{color:var(--ok)}.sval.red{color:var(--err)}
+.tw{display:inline-flex;align-items:center;gap:8px;cursor:pointer;-webkit-user-select:none;user-select:none}
+.tw input{display:none}
+.tt{width:36px;height:20px;background:#cbd5e1;border-radius:10px;position:relative;transition:background .2s;flex-shrink:0}
+.tw input:checked+.tt{background:var(--primary)}
+.tk{position:absolute;top:3px;left:3px;width:14px;height:14px;background:#fff;border-radius:50%;transition:left .2s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.tw input:checked+.tt .tk{left:19px}
+.tm{color:var(--muted)}.tsm{font-size:12.5px}
+.empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.empty i{font-size:38px;margin-bottom:12px;display:block;color:#cbd5e1}
+/* dim checkboxes in section modal */
+.dim-checks{display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px}
+.dc-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .1s}
+.dc-item:hover{background:var(--bg)}
+.dc-item input[type=checkbox]{width:15px;height:15px;accent-color:var(--primary);flex-shrink:0;cursor:pointer}
+.dc-label{font-size:13px;font-weight:500}
+.dc-sub{font-size:11px;color:var(--muted)}
+/* Modal */
+.mov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:1000;overflow-y:auto}
+.modal{background:var(--surface);border-radius:14px;width:680px;max-width:98vw;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.mw{width:960px}
+.mhd{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.mhd h2{font-size:15px;font-weight:600}
+.mbd{padding:20px;overflow-y:auto;max-height:74vh}
+.mft{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+/* Take */
+.tw-wrap{min-height:100vh;display:flex;flex-direction:column}
+.tw-bar{flex-shrink:0}
+.tw-prog{height:4px;border-radius:2px;overflow:hidden}
+.tw-pf{height:100%;border-radius:2px;transition:width .35s}
+.tw-body{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:44px 20px}
+.qcard{border-radius:14px;padding:36px;max-width:640px;width:100%}
+.opt-btn{width:100%;text-align:left;padding:12px 14px;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;transition:all .12s;margin-bottom:7px;display:flex;align-items:center;gap:10px;border:1.5px solid;outline:none}
+.opt-c{width:18px;height:18px;border-radius:50%;border:2px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.opt-ck{width:18px;height:18px;border-radius:4px;border:2px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px}
+.tw-nav{flex-shrink:0;padding:14px 24px}
+.tw-ni{max-width:640px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
+.tg{display:inline-flex;align-items:center;gap:5px;padding:9px 16px;background:transparent;border:none;font-size:14px;cursor:pointer;font-family:inherit;border-radius:8px}
+.tg:disabled{opacity:.35;cursor:not-allowed}.tg:hover:not(:disabled){background:rgba(0,0,0,.06)}
+.tp{display:inline-flex;align-items:center;gap:5px;padding:10px 22px;border:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;color:#fff}
+.tp:hover{opacity:.88}.tp:disabled{opacity:.45;cursor:not-allowed}
+.pdots{display:flex;gap:5px;align-items:center}
+.pdot{width:7px;height:7px;border-radius:50%;background:var(--border)}
+.rank-list{display:flex;flex-direction:column;gap:6px}
+.rank-item{display:flex;align-items:center;gap:10px;padding:12px 14px;border:1.5px solid;border-radius:12px;cursor:grab;transition:all .15s;user-select:none;-webkit-user-select:none}
+.rank-item:active{cursor:grabbing}
+.rank-item.drag-over{border-style:dashed;opacity:.65}
+.rank-item.dragging{opacity:.3}
+.rank-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.rank-hdl{font-size:18px;opacity:.35;flex-shrink:0;line-height:1}
+.rank-txt{flex:1;font-size:14px;font-weight:500}
+.rank-arr{display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.rarr{background:transparent;border:none;cursor:pointer;padding:2px 4px;opacity:.35;font-size:12px;border-radius:4px}
+.rarr:hover:not(:disabled){opacity:1;background:rgba(0,0,0,.07)}.rarr:disabled{opacity:.12;cursor:not-allowed}
+.cw{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:48px 20px}
+.ci{max-width:660px;width:100%}
+.dr{border-radius:12px;padding:20px;margin-bottom:10px;border:1px solid var(--border);background:var(--surface)}
+.sbb{height:7px;background:var(--border);border-radius:4px;margin:8px 0 5px;overflow:hidden}
+.sbf{height:100%;border-radius:4px;transition:width .7s}
+.bpb{border:1px solid var(--border);border-radius:10px;overflow:hidden;position:sticky;top:20px}
+.sw{width:22px;height:22px;border-radius:4px;cursor:pointer;border:2px solid transparent;flex-shrink:0;transition:border-color .1s;display:inline-block}
+.sw:hover,.sw.sl{border-color:#1e293b}
+.swr{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.toast{position:fixed;top:16px;right:16px;z-index:9999;padding:11px 15px;border-radius:9px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px;box-shadow:0 6px 20px rgba(0,0,0,.14);animation:ts .2s ease}
+.tok{background:#022c22;color:#34d399}.terr{background:#450a0a;color:#f87171}.tinf{background:#1e3a5f;color:#93c5fd}
+@keyframes ts{from{transform:translateX(50px);opacity:0}to{transform:none;opacity:1}}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+.sp{animation:spin .7s linear infinite;display:inline-block}
+@media(max-width:768px){.sgrid{grid-template-columns:1fr 1fr}.rrow{grid-template-columns:1fr 1fr 1fr}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+/* ── CONFIG — update these three values ── */
+const SUPABASE_URL      = 'https://owouiukkteoentgpbrlk.supabase.co';
+const SUPABASE_ANON_KEY = 'PASTE_YOUR_ANON_KEY_HERE';
+const APP_URL           = 'https://assessments.vitalspark.ai';
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="tr" style="position:fixed;top:16px;right:16px;z-index:9999"></div>
+<script>
+'use strict';
+
+const STORE='ab_v7';
+const SW=['#2563eb','#7c3aed','#db2777','#dc2626','#ea580c','#d97706','#059669','#0891b2','#0f172a','#334155'];
+const DB0={primaryColor:'#2563eb',bgColor:'#f8fafc',textColor:'#1e293b',surfaceColor:'#ffffff',borderColor:'#e2e8f0',logoUrl:'',fontFamily:'system-ui, sans-serif',btnRadius:'8',cardRadius:'12'};
+const QIC={instruction:'ti-info-circle',contact_form:'ti-user-circle',multiple_choice:'ti-circle-dot',multi_select:'ti-checkbox',ranking:'ti-sort-ascending-2',text:'ti-text-size'};
+const QLA={instruction:'Instruction Block',contact_form:'Contact Form',multiple_choice:'Multiple Choice',multi_select:'Multi-Select',ranking:'Rank These',text:'Open Text'};
+
+const uid=()=>Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-5);
+const now=()=>new Date().toISOString();
+const fd=iso=>new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+/* ══ DB ══ */
+/* ── AUTH STATE ─────────────────────────────────────────────────── */
+let _sb=null,_session=null,_tenantId=null,_userEmail='',_userName='';
+let _syncTimer=null,_syncQueue=new Set();
+
+/* ── SUPABASE HELPERS ────────────────────────────────────────────── */
+function _hdrs(extra={}){
+  return{apikey:SUPABASE_ANON_KEY,'Authorization':'Bearer '+(_session?.access_token||SUPABASE_ANON_KEY),'Content-Type':'application/json',...extra};
+}
+async function sbGet(table,qs=''){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}${qs?'?'+qs:''}`,{headers:_hdrs({'Accept':'application/json'})});
+  if(!r.ok)throw new Error(`GET ${table} ${r.status}`);return r.json();
+}
+async function sbUpsert(table,data){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}`,{method:'POST',headers:_hdrs({Prefer:'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify(data)});
+  if(!r.ok){const e=await r.text();throw new Error(`UPSERT ${table} ${r.status}: ${e}`);}
+}
+async function sbUpsertReturn(table,data){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}`,{method:'POST',headers:_hdrs({Prefer:'resolution=merge-duplicates,return=representation'}),body:JSON.stringify(data)});
+  if(!r.ok){const e=await r.text();throw new Error(`UPSERT ${table} ${r.status}: ${e}`);}
+  const rows=await r.json();return Array.isArray(rows)?rows[0]:rows;
+}
+async function sbDel(table,id){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`,{method:'DELETE',headers:_hdrs()});
+  if(!r.ok)throw new Error(`DELETE ${table} ${r.status}`);
+}
+
+/* ── FIELD MAPPING: Builder (camelCase) ↔ Supabase (snake_case) ── */
+function asmToDb(a){return{id:a.id,tenant_id:_tenantId,title:a.title,description:a.description||'',status:a.status||'draft',brand:a.brand||{},webhook_url:a.webhookUrl||'',webhook_headers:a.webhookHeaders||'{"Content-Type":"application/json"}',show_results:a.showResults!==false,created_at:a.createdAt||now()};}
+function dbToAsm(r){return{id:r.id,title:r.title,description:r.description||'',status:r.status||'draft',brand:r.brand||{},webhookUrl:r.webhook_url||'',webhookHeaders:r.webhook_headers||'{"Content-Type":"application/json"}',showResults:r.show_results!==false,createdAt:r.created_at};}
+function qToDb(q,aId){return{id:q.id,assessment_id:aId||q.aId,section_id:q.sectionId||null,type:q.type,title:q.title||'',description:q.description||'',required:q.required!==false,order_index:q.orderIndex||0,position_weights:q.positionWeights||[],contact_fields:q.contactFields||[],options:q.options||[]};}
+function dbToQ(r){return{id:r.id,aId:r.assessment_id,sectionId:r.section_id,type:r.type,title:r.title||'',description:r.description||'',required:r.required!==false,orderIndex:r.order_index||0,positionWeights:r.position_weights||[],contactFields:r.contact_fields||[],options:r.options||[]};}
+function dimToDb(d,aId){return{id:d.id,assessment_id:aId||d.aId,name:d.name,description:d.description||'',color:d.color||'#3b82f6',order_index:d.orderIndex||0,ranges:d.ranges||[]};}
+function dbToDim(r){return{id:r.id,aId:r.assessment_id,name:r.name,description:r.description||'',color:r.color||'#3b82f6',orderIndex:r.order_index||0,ranges:r.ranges||[]};}
+function secToDb(s,aId){return{id:s.id,assessment_id:aId||s.aId,title:s.title,description:s.description||'',order_index:s.orderIndex||0,active_dim_ids:s.activeDimIds||[]};}
+function dbToSec(r){return{id:r.id,aId:r.assessment_id,title:r.title,description:r.description||'',orderIndex:r.order_index||0,activeDimIds:r.active_dim_ids||[]};}
+
+/* ── DB LOAD ─────────────────────────────────────────────────────── */
+let db;
+async function loadAll(){
+  const asms=await sbGet('ab_assessments',`tenant_id=eq.${_tenantId}&order=created_at.desc`);
+  db={assessments:asms.map(dbToAsm),questions:{},dimensions:{},sections:{},responses:{}};
+  if(db.sections===undefined)db.sections={};
+  await Promise.all(asms.map(async a=>{
+    const[dims,secs,qs,rs]=await Promise.all([
+      sbGet('ab_dimensions',`assessment_id=eq.${a.id}&order=order_index`),
+      sbGet('ab_sections',  `assessment_id=eq.${a.id}&order=order_index`),
+      sbGet('ab_questions', `assessment_id=eq.${a.id}&order=order_index`),
+      sbGet('ab_responses', `assessment_id=eq.${a.id}&order=created_at.desc&limit=500`),
+    ]);
+    db.dimensions[a.id]=dims.map(dbToDim);
+    db.sections[a.id]=secs.map(dbToSec);
+    db.questions[a.id]=qs.map(dbToQ);
+    db.responses[a.id]=rs;
+  }));
+}
+
+/* ── SYNC TO SUPABASE (debounced background write) ───────────────── */
+function sv(){
+  // Local backup (instant)
+  try{localStorage.setItem(STORE,JSON.stringify(db));}catch{}
+  // Supabase sync (debounced 600ms)
+  if(_session&&_tenantId&&S.asmId){
+    _syncQueue.add(S.asmId);
+    clearTimeout(_syncTimer);
+    _syncTimer=setTimeout(flushSync,600);
+  }
+}
+async function flushSync(){
+  const ids=[..._syncQueue];_syncQueue.clear();
+  for(const aId of ids){if(aId)await syncAsm(aId).catch(e=>console.warn('Sync failed:',e));}
+}
+async function syncAsm(aId){
+  const asm=db.assessments.find(a=>a.id===aId);if(!asm)return;
+  await Promise.all([
+    sbUpsert('ab_assessments',asmToDb(asm)),
+    ...((db.dimensions[aId]||[]).map(d=>sbUpsert('ab_dimensions',dimToDb(d,aId)))),
+    ...((db.sections[aId]||[]).map(s=>sbUpsert('ab_sections',secToDb(s,aId)))),
+    ...((db.questions[aId]||[]).map(q=>sbUpsert('ab_questions',qToDb(q,aId)))),
+  ]);
+}
+
+/* ── TENANT SETUP ────────────────────────────────────────────────── */
+async function ensureTenant(){
+  const rows=await sbGet('user_tenants',`user_id=eq.${_session.user.id}&select=tenant_id`);
+  if(rows.length)return rows[0].tenant_id;
+  // First login — create a personal tenant
+  const slug=_session.user.id.slice(0,8);
+  const tenant=await sbUpsertReturn('tenants',{name:_userEmail.split('@')[0],slug});
+  await sbUpsert('user_tenants',{user_id:_session.user.id,tenant_id:tenant.id,role:'owner'});
+  return tenant.id;
+}
+
+function mkSample(){
+  const AID='demo-001';
+  const dims=[
+    {id:'d-mkt',aId:AID,name:'Marketing',description:'Brand & lead gen',color:'#3b82f6',orderIndex:0,ranges:[
+      {id:uid(),min:0,max:40,label:'Emerging',description:'Marketing needs focus',recommendation:'Define your ICP and commit to one channel.'},
+      {id:uid(),min:41,max:80,label:'Developing',description:'Marketing is gaining traction',recommendation:'Systematize lead gen and track conversions.'},
+      {id:uid(),min:81,max:200,label:'Advanced',description:'Marketing is a strength',recommendation:'Scale proven channels and test new ones.'},
+    ]},
+    {id:'d-ops',aId:AID,name:'Operations',description:'Process & scalability',color:'#10b981',orderIndex:1,ranges:[
+      {id:uid(),min:0,max:40,label:'Emerging',description:'Processes are ad hoc',recommendation:'Document your 3 most critical processes.'},
+      {id:uid(),min:41,max:80,label:'Developing',description:'Processes becoming systematic',recommendation:'Delegate SOPs and add automation.'},
+      {id:uid(),min:81,max:200,label:'Advanced',description:'Operations are scalable',recommendation:'Focus on capacity and continuous improvement.'},
+    ]},
+    {id:'d-lead',aId:AID,name:'Leadership',description:'Vision & team',color:'#8b5cf6',orderIndex:2,ranges:[
+      {id:uid(),min:0,max:40,label:'Emerging',description:'Leadership needs development',recommendation:'Find a coach and commit to a 3-year vision.'},
+      {id:uid(),min:41,max:80,label:'Developing',description:'Leadership is growing',recommendation:'Build a team and create a decision framework.'},
+      {id:uid(),min:81,max:200,label:'Advanced',description:'Leadership is a strength',recommendation:'Develop successors and expand your influence.'},
+    ]},
+  ];
+  const sec1id=uid();const sec2id=uid();
+  const sections={[AID]:[
+    {id:sec1id,aId:AID,title:'Growth Priorities',description:'What the business is focused on',orderIndex:0,activeDimIds:['d-mkt','d-ops','d-lead']},
+    {id:sec2id,aId:AID,title:'Current Reality',description:'How you actually spend your time',orderIndex:1,activeDimIds:['d-mkt','d-ops','d-lead']},
+  ]};
+  const qs=[
+    {id:'qi',aId:AID,sectionId:sec1id,type:'instruction',orderIndex:0,required:false,title:'Business Readiness Assessment',description:'Answer a few questions to discover your biggest growth opportunity. Takes 2 minutes.',options:[],contactFields:[]},
+    {id:'qc',aId:AID,sectionId:sec1id,type:'contact_form',orderIndex:1,required:true,title:'Your Information',description:'',options:[],contactFields:[
+      {id:'fn',label:'Full Name',type:'text',required:true},
+      {id:'em',label:'Email Address',type:'email',required:true},
+      {id:'co',label:'Company',type:'text',required:false},
+    ]},
+    {id:'q1',aId:AID,sectionId:sec1id,type:'ranking',orderIndex:2,required:true,contactFields:[],
+     title:'Rank these growth drivers from most to least important right now:',description:'',
+     positionWeights:[10,6,3,1],
+     options:[
+       {id:'o1a',text:'Generating more leads & visibility',scores:{'d-mkt':8,'d-ops':2,'d-lead':3}},
+       {id:'o1b',text:'Building efficient, scalable processes',scores:{'d-mkt':2,'d-ops':8,'d-lead':3}},
+       {id:'o1c',text:'Strengthening team leadership & vision',scores:{'d-mkt':3,'d-ops':3,'d-lead':8}},
+       {id:'o1d',text:'Improving customer retention',scores:{'d-mkt':5,'d-ops':5,'d-lead':3}},
+     ]},
+    {id:'q2',aId:AID,sectionId:sec2id,type:'ranking',orderIndex:0,required:true,contactFields:[],
+     title:'Rank where you spend most of your working hours:',description:'Most time at the top',
+     positionWeights:[10,6,3,1],
+     options:[
+       {id:'o2a',text:'Sales, marketing & outreach',scores:{'d-mkt':8,'d-ops':1,'d-lead':2}},
+       {id:'o2b',text:'Delivery, operations & fulfillment',scores:{'d-mkt':1,'d-ops':8,'d-lead':2}},
+       {id:'o2c',text:'Team management & strategic planning',scores:{'d-mkt':2,'d-ops':3,'d-lead':8}},
+       {id:'o2d',text:'Finance, admin & putting out fires',scores:{'d-mkt':3,'d-ops':4,'d-lead':3}},
+     ]},
+    {id:'q3',aId:AID,sectionId:sec2id,type:'multiple_choice',orderIndex:1,required:true,contactFields:[],
+     title:'How predictably does your business generate new clients?',description:'',
+     options:[
+       {id:uid(),text:'Unpredictably \u2014 mostly referrals when I get lucky',scores:{'d-mkt':2,'d-ops':3,'d-lead':2}},
+       {id:uid(),text:'Occasionally \u2014 some outreach, not consistent',scores:{'d-mkt':5,'d-ops':5,'d-lead':3}},
+       {id:uid(),text:'Regularly \u2014 a defined process generating leads weekly',scores:{'d-mkt':8,'d-ops':7,'d-lead':5}},
+       {id:uid(),text:'Systematically \u2014 leads flow on autopilot',scores:{'d-mkt':12,'d-ops':10,'d-lead':8}},
+     ]},
+  ];
+  return{assessments:[{id:AID,title:'Business Readiness Assessment',description:'Discover your strongest dimension across Marketing, Operations & Leadership',status:'published',brand:{...DB0},webhookUrl:'',webhookHeaders:'{"Content-Type":"application/json"}',showResults:true,createdAt:now()}],sections,questions:{[AID]:qs},dimensions:{[AID]:dims},responses:{[AID]:[]}};
+}
+
+/* ══ HELPERS ══ */
+const gAsm=()=>db.assessments.find(a=>a.id===S.asmId);
+const gQs=()=>[...(db.questions[S.asmId]||[])];
+const gDs=()=>[...(db.dimensions[S.asmId]||[])].sort((a,b)=>a.orderIndex-b.orderIndex);
+const gSecs=()=>[...((db.sections||{})[S.asmId]||[])].sort((a,b)=>a.orderIndex-b.orderIndex);
+const gRs=()=>[...(db.responses[S.asmId]||[])].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+const gb=asm=>({...DB0,...(asm?.brand||{})});
+
+function getActiveDims(secId){
+  const sec=gSecs().find(s=>s.id===secId);
+  const all=gDs();
+  if(!sec||!sec.activeDimIds||!sec.activeDimIds.length)return all;
+  const active=all.filter(d=>sec.activeDimIds.includes(d.id));
+  return active.length?active:all;
+}
+
+// Sort questions for take flow: by section order then question order within section
+function orderedQs(){
+  const secs=gSecs();
+  const sIdx=Object.fromEntries(secs.map((s,i)=>[s.id,i]));
+  return [...gQs()].sort((a,b)=>{
+    const si=(a.sectionId!=null?sIdx[a.sectionId]:9999)??9999;
+    const sj=(b.sectionId!=null?sIdx[b.sectionId]:9999)??9999;
+    if(si!==sj)return si-sj;
+    return (a.orderIndex||0)-(b.orderIndex||0);
+  });
+}
+
+// Questions grouped by section for editor
+function qsBySec(){
+  const secs=gSecs();
+  const all=gQs().sort((a,b)=>(a.orderIndex||0)-(b.orderIndex||0));
+  const grouped={};
+  secs.forEach(s=>grouped[s.id]=[]);
+  const ungrouped=[];
+  all.forEach(q=>{
+    if(q.sectionId&&grouped[q.sectionId])grouped[q.sectionId].push(q);
+    else ungrouped.push(q);
+  });
+  return{secs,grouped,ungrouped};
+}
+
+/* ══ SCORING ══ */
+function calcScores(qs,dims,answers){
+  const s=Object.fromEntries(dims.map(d=>[d.id,0]));
+  qs.forEach(q=>{
+    if(q.type==='multiple_choice'&&answers[q.id]){
+      const opt=(q.options||[]).find(o=>o.id===answers[q.id]);
+      if(opt?.scores)Object.entries(opt.scores).forEach(([k,v])=>{if(s[k]!==undefined)s[k]+=Number(v);});
+    }
+    if(q.type==='multi_select'&&Array.isArray(answers[q.id])){
+      answers[q.id].forEach(oid=>{const opt=(q.options||[]).find(o=>o.id===oid);if(opt?.scores)Object.entries(opt.scores).forEach(([k,v])=>{if(s[k]!==undefined)s[k]+=Number(v);});});
+    }
+    if(q.type==='ranking'&&Array.isArray(answers[q.id])&&answers[q.id].length){
+      const order=answers[q.id];const n=order.length;
+      const weights=q.positionWeights&&q.positionWeights.length===n?q.positionWeights:Array.from({length:n},(_,i)=>n-i);
+      order.forEach((optId,idx)=>{
+        const opt=(q.options||[]).find(o=>o.id===optId);
+        const w=Number(weights[idx])||0;
+        if(opt?.scores)Object.entries(opt.scores).forEach(([k,v])=>{if(s[k]!==undefined)s[k]+=Number(v)*w;});
+      });
+    }
+  });
+  return s;
+}
+function getRanks(dims,scores){return Object.fromEntries(dims.map(d=>{const s=scores[d.id]||0;const r=(d.ranges||[]).find(r=>s>=r.min&&s<=r.max);return[d.id,r||{label:'N/A',description:'',recommendation:''}];}));}
+function getTied(scores){const vals=Object.values(scores);if(!vals.length)return[];const mx=Math.max(...vals);return Object.entries(scores).filter(([,v])=>v===mx).map(([id])=>id);}
+function mxSc(qs,dId){let m=0;qs.forEach(q=>{
+  if(q.type==='multiple_choice'){const sc=(q.options||[]).map(o=>Number(o.scores?.[dId]||0));if(sc.length)m+=Math.max(0,...sc);}
+  if(q.type==='multi_select'){(q.options||[]).forEach(o=>{const s=Number(o.scores?.[dId]||0);if(s>0)m+=s;});}
+  if(q.type==='ranking'){const opts=q.options||[];const n=opts.length;const weights=q.positionWeights&&q.positionWeights.length===n?q.positionWeights:Array.from({length:n},(_,i)=>n-i);const maxW=n?Math.max(...weights):0;const maxSc=Math.max(0,...opts.map(o=>Number(o.scores?.[dId]||0)));m+=maxSc*maxW;}
+});return m||1;}
+
+/* ══ WEBHOOK ══ */
+async function fireWH(asm,resp,dims){
+  if(!asm?.webhookUrl)return{status:'no_url'};
+  const dm=Object.fromEntries(dims.map(d=>[d.id,d.name]));
+  const p={responseId:resp.id,assessmentId:asm.id,assessmentTitle:asm.title,submittedAt:resp.createdAt,contact:resp.contact||{},scores:Object.fromEntries(Object.entries(resp.scores||{}).map(([k,v])=>[dm[k]||k,v])),ranks:Object.fromEntries(Object.entries(resp.ranks||{}).map(([k,v])=>[dm[k]||k,v])),tiedTopDimensions:(resp.tiedTop||[]).map(id=>dm[id]||id),topDimension:dm[(resp.tiedTop||[])[0]]||null};
+  try{const hd={'Content-Type':'application/json'};try{if(asm.webhookHeaders)Object.assign(hd,JSON.parse(asm.webhookHeaders));}catch{}const r=await fetch(asm.webhookUrl,{method:'POST',headers:hd,body:JSON.stringify(p)});return{status:r.ok?'success':'error',code:r.status};}catch(e){return{status:'error',message:e.message};}
+}
+
+/* ══ STATE ══ */
+const S={view:'home',asmId:null,tab:'gen',answers:{},contact:{},step:0,preview:false,doneResp:null,modal:null,expandedSecs:{}};
+let _drag=null;
+
+function dSt(e,qId,optId){_drag={qId,optId};e.dataTransfer.effectAllowed='move';document.querySelector(`[data-opt="${optId}"]`)?.classList.add('dragging');}
+function dOv(e,qId,optId){e.preventDefault();e.dataTransfer.dropEffect='move';document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over'));document.querySelector(`[data-opt="${optId}"]`)?.classList.add('drag-over');}
+function dDr(e,qId,targetId){e.preventDefault();document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over','dragging'));if(!_drag||_drag.optId===targetId){_drag=null;return;}const order=[...(S.answers[qId]||[])];const fi=order.indexOf(_drag.optId),ti=order.indexOf(targetId);if(fi<0||ti<0){_drag=null;return;}order.splice(fi,1);order.splice(ti,0,_drag.optId);S.answers[qId]=order;_drag=null;render();}
+function dEnd(){document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over','dragging'));_drag=null;}
+function mvRk(qId,optId,dir){const order=[...(S.answers[qId]||[])];const i=order.indexOf(optId),j=i+dir;if(j<0||j>=order.length)return;[order[i],order[j]]=[order[j],order[i]];S.answers[qId]=order;render();}
+
+/* ══ RENDER ══ */
+function render(){
+  const app=document.getElementById('app');
+  if(S.view==='take'){app.innerHTML=rTake();return;}
+  if(S.view==='complete'){app.innerHTML=rComplete();return;}
+  app.innerHTML=`<div class="layout"><aside class="sidebar">
+    <div class="sidebar-logo"><i class="ti ti-chart-bar-popular"></i> AssessBuilder</div>
+    <nav class="sidebar-nav">
+      <div class="si ${S.view==='home'?'on':''}" onclick="goTo('home')"><i class="ti ti-layout-grid"></i> Assessments</div>
+      ${S.asmId?`<div class="si ${S.view==='ed'?'on':''}" onclick="goTo('ed')"><i class="ti ti-pencil"></i> Editor</div><div class="si ${S.view==='res'?'on':''}" onclick="goTo('res')"><i class="ti ti-users"></i> Results</div>`:''}
+    </nav>
+    <div class="s-foot">
+      <div style="margin-bottom:8px;font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_userEmail}">${_userName||_userEmail}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:11px">${db.assessments.length} assessment${db.assessments.length!==1?'s':''}</span>
+        <button onclick="signOut()" style="background:transparent;border:1px solid #334155;color:#94a3b8;padding:3px 9px;border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit" title="Sign out">Sign out</button>
+      </div>
+    </div>
+  </aside><main class="main">${S.view==='home'?rHome():S.view==='ed'?rEd():S.view==='res'?rRes():''}</main></div>${rMod()}`;
+  bindCP();
+}
+
+/* ══ HOME ══ */
+function rHome(){
+  return `<div class="content"><div class="ph"><div><h1>Assessments</h1><p class="ph-sub">Build, brand, and deploy scoring experiences</p></div><button class="btn bp" onclick="crtAsm()"><i class="ti ti-plus"></i> New Assessment</button></div>
+  ${db.assessments.length?`<div class="agrid">${db.assessments.map(a=>{const b=gb(a);const qs=db.questions[a.id]||[];const rs=db.responses[a.id]||[];const secs=(db.sections||{})[a.id]||[];
+    return `<div class="acard" style="border-top:3px solid ${esc(b.primaryColor)}">
+      ${b.logoUrl?`<img src="${esc(b.logoUrl)}" style="height:24px;object-fit:contain;margin-bottom:10px" onerror="this.style.display='none'" alt="">`:''}
+      <div class="fx ic jb mb2"><div style="font-size:15px;font-weight:600">${esc(a.title)}</div><span class="bdg ${a.status==='published'?'bpub':'bdft'}">${a.status}</span></div>
+      ${a.description?`<p style="font-size:12.5px;color:var(--muted);margin-bottom:10px;line-height:1.5">${esc(a.description)}</p>`:''}
+      <div class="fx g3 mb3" style="font-size:12px;color:var(--muted)"><span><i class="ti ti-layout-rows"></i> ${secs.length} section${secs.length!==1?'s':''}</span><span><i class="ti ti-help-circle"></i> ${qs.length} question${qs.length!==1?'s':''}</span><span><i class="ti ti-users"></i> ${rs.length} response${rs.length!==1?'s':''}</span></div>
+      <div class="fx g2 mt2">
+        <button class="btn bs bsm" onclick="edAsm('${a.id}')"><i class="ti ti-pencil"></i> Edit</button>
+        <button class="btn bs bsm" onclick="vwRes('${a.id}')"><i class="ti ti-users"></i> Results</button>
+        <button class="btn bp bsm" onclick="prvAsm('${a.id}')"><i class="ti ti-eye"></i> Preview</button>
+        <button class="btn bg bic bsm" onclick="dlAsm('${a.id}')"><i class="ti ti-trash"></i></button>
+      </div></div>`;}).join('')}</div>`
+  :`<div class="empty"><i class="ti ti-clipboard-list"></i><p>No assessments yet</p><button class="btn bp mt3" onclick="crtAsm()"><i class="ti ti-plus"></i> Create First</button></div>`}</div>`;
+}
+
+/* ══ EDITOR ══ */
+function rEd(){
+  const asm=gAsm();if(!asm)return`<div class="content"><p>Not found.</p></div>`;
+  const secs=gSecs();const qs=gQs();
+  return `<div class="content">
+    <div class="ph">
+      <div class="fx ic g3"><button class="btn bg bic" onclick="goTo('home')"><i class="ti ti-arrow-left"></i></button>
+        <div><h1>${esc(asm.title)}</h1><div class="fx ic g2 mt1"><span class="bdg ${asm.status==='published'?'bpub':'bdft'}">${asm.status}</span><span class="tm tsm">${secs.length} sections \u00b7 ${qs.length} questions \u00b7 ${gDs().length} dimensions</span></div></div>
+      </div>
+      <div class="fx g2"><button class="btn bs" onclick="prvAsm('${asm.id}')"><i class="ti ti-eye"></i> Preview</button><button class="btn bp" onclick="togSt('${asm.id}')">${asm.status==='published'?'Unpublish':'Publish'}</button></div>
+    </div>
+    <div class="tabs">
+      <div class="tab ${S.tab==='gen'?'on':''}" onclick="stTab('gen')"><i class="ti ti-settings"></i> General</div>
+      <div class="tab ${S.tab==='qs'?'on':''}" onclick="stTab('qs')"><i class="ti ti-layout-rows"></i> Sections & Questions</div>
+      <div class="tab ${S.tab==='sc'?'on':''}" onclick="stTab('sc')"><i class="ti ti-chart-bar"></i> Dimensions</div>
+      <div class="tab ${S.tab==='br'?'on':''}" onclick="stTab('br')"><i class="ti ti-palette"></i> Brand</div>
+      <div class="tab ${S.tab==='wh'?'on':''}" onclick="stTab('wh')"><i class="ti ti-webhook"></i> Webhook</div>
+      <div class="tab ${S.tab==='embed'?'on':''}" onclick="stTab('embed')"><i class="ti ti-share"></i> Share & Embed</div>
+      <div class="tab ${S.tab==='io'?'on':''}" onclick="stTab('io')"><i class="ti ti-arrows-transfer-up"></i> Import / Export</div>
+
+    </div>
+    ${S.tab==='gen'?rGen(asm):S.tab==='qs'?rQsTab():S.tab==='sc'?rSc():S.tab==='br'?rBr(asm):S.tab==='embed'?rEmbed(asm):S.tab==='io'?rIO(asm):rWH(asm)}
+  </div>`;
+}
+
+function rGen(asm){return `<div class="card" style="max-width:600px">
+  <div class="fg"><label>Title</label><input type="text" id="g-t" value="${esc(asm.title)}"></div>
+  <div class="fg"><label>Description</label><textarea id="g-d" rows="3">${esc(asm.description)}</textarea></div>
+  <div class="fg"><label>Status</label><select id="g-s"><option value="draft" ${asm.status==='draft'?'selected':''}>Draft</option><option value="published" ${asm.status==='published'?'selected':''}>Published</option></select></div>
+  <label class="tw mb4"><input type="checkbox" id="g-sh" ${asm.showResults?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Show results page to respondents after submission</span></label>
+  <button class="btn bp" onclick="svGen()"><i class="ti ti-check"></i> Save Changes</button>
+</div>`;}
+
+/* ══ SECTIONS & QUESTIONS TAB ══ */
+function rQsTab(){
+  const{secs,grouped,ungrouped}=qsBySec();
+  const dims=gDs();
+  return `<div>
+    <div class="fx ic jb mb4">
+      <div><h2 style="font-size:16px;font-weight:600">Sections & Questions</h2><p class="tm tsm mt1">Sections group questions and scope dimension dropdowns to keep scoring manageable.</p></div>
+      <button class="btn bp" onclick="opSecMod(null)"><i class="ti ti-plus"></i> Add Section</button>
+    </div>
+    ${!dims.length?`<div class="ib"><i class="ti ti-info-circle" style="flex-shrink:0"></i> Add <strong>Dimensions</strong> first (in the Dimensions tab) before configuring section scoring.</div>`:''}
+    ${secs.map(sec=>{
+      const secDims=sec.activeDimIds?.length?dims.filter(d=>sec.activeDimIds.includes(d.id)):dims;
+      const isOpen=S.expandedSecs[sec.id]!==false;
+      const qs2=grouped[sec.id]||[];
+      return `<div class="sec-wrap">
+        <div class="sec-head" onclick="togSec('${sec.id}')">
+          <i class="ti ti-chevron-right sec-caret ${isOpen?'open':''}" style="font-size:13px;color:var(--muted)"></i>
+          <div class="sec-title">${esc(sec.title)||'Untitled Section'}</div>
+          <div class="sec-dimtags">
+            ${secDims.slice(0,4).map(d=>`<span class="dim-tag"><span style="width:7px;height:7px;border-radius:50%;background:${esc(d.color||'#94a3b8')};display:inline-block"></span>${esc(d.name)}</span>`).join('')}
+            ${secDims.length>4?`<span class="bdg bdft">+${secDims.length-4} more</span>`:''}
+            ${!sec.activeDimIds?.length?`<span class="bdg byw">All dims</span>`:''}
+          </div>
+          <div class="fx g1" onclick="event.stopPropagation()">
+            <button class="btn bs bsm bic" onclick="opSecMod('${sec.id}')" title="Section settings"><i class="ti ti-settings"></i></button>
+            <button class="btn bp bsm" onclick="opQM(null,'${sec.id}')"><i class="ti ti-plus"></i> Add Question</button>
+            <button class="btn bd bsm bic" onclick="dlSec('${sec.id}')" title="Delete section"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>
+        ${isOpen?`<div class="sec-body">
+          ${!qs2.length?`<div class="sec-empty"><i class="ti ti-plus-circle" style="font-size:18px;display:block;margin:0 auto 6px;opacity:.3"></i>No questions in this section yet</div>`:
+            qs2.map((q,i)=>rQItem(q,i,qs2.length,sec.id)).join('')}
+        </div>`:''}
+      </div>`;}).join('')}
+    ${ungrouped.length?`<div class="ungrouped"><div class="ungrouped-head">Ungrouped Questions</div><div style="padding:10px">${ungrouped.map((q,i)=>rQItem(q,i,ungrouped.length,null)).join('')}</div></div>`:''}
+    ${!secs.length&&!ungrouped.length?`<div class="empty"><i class="ti ti-layout-rows"></i><p>No sections yet. Add a section to get started.</p></div>`:''}
+  </div>`;
+}
+
+function rQItem(q,i,total,secId){
+  const sqs=secId?(grouped_cache[secId]||[]):(qsBySec().ungrouped);
+  return `<div class="qi">
+    <div class="qi-ico"><i class="ti ${QIC[q.type]||'ti-question-mark'}"></i></div>
+    <div class="qi-inf"><div class="qi-tit">${esc(q.title)||'<em style="color:#94a3b8">Untitled</em>'}</div><div class="qi-sub">${QLA[q.type]||q.type}${(q.type==='multiple_choice'||q.type==='multi_select'||q.type==='ranking')?` \u00b7 ${(q.options||[]).length} option${(q.options||[]).length!==1?'s':''}`:''}</div></div>
+    <div class="qi-act">
+      <button class="btn bg bic bsm" onclick="mvQSec('${q.id}',-1,'${secId||''}')" ${i===0?'disabled':''}><i class="ti ti-arrow-up"></i></button>
+      <button class="btn bg bic bsm" onclick="mvQSec('${q.id}',1,'${secId||''}')" ${i===total-1?'disabled':''}><i class="ti ti-arrow-down"></i></button>
+      <button class="btn bg bic bsm" onclick="opQM('${q.id}','${secId||q.sectionId||''}')"><i class="ti ti-pencil"></i></button>
+      <button class="btn bd bic bsm" onclick="dlQ('${q.id}')"><i class="ti ti-trash"></i></button>
+    </div>
+  </div>`;
+}
+
+// cache for rQItem
+let grouped_cache={};
+
+function rSc(){
+  const dims=gDs();
+  return `<div><div class="fx ic jb mb4"><div><h2 style="font-size:16px;font-weight:600">Dimensions</h2><p class="tm tsm mt1">Global dimensions available across all sections. Each section can scope to a subset.</p></div><button class="btn bp" onclick="opDimMod(null)"><i class="ti ti-plus"></i> Add Dimension</button></div>
+  ${!dims.length?`<div class="empty"><i class="ti ti-chart-bar"></i><p>No dimensions yet.</p></div>`
+  :dims.map(d=>`<div style="border-left:4px solid ${esc(d.color||'#94a3b8')};border-radius:10px;background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:10px">
+    <div class="fx ic jb mb3"><div class="fx ic g2"><div style="width:11px;height:11px;border-radius:50%;background:${esc(d.color||'#94a3b8')};flex-shrink:0"></div><strong>${esc(d.name)}</strong>${d.description?`<span class="tm tsm">${esc(d.description)}</span>`:''}</div>
+    <div class="fx g2"><button class="btn bs bsm" onclick="opDimMod('${d.id}')"><i class="ti ti-pencil"></i> Edit</button><button class="btn bd bsm" onclick="dlDim('${d.id}')"><i class="ti ti-trash"></i></button></div></div>
+    <table><thead><tr><th>Range</th><th>Label</th><th>Description</th><th>Recommendation</th></tr></thead>
+    <tbody>${(d.ranges||[]).sort((a,b)=>a.min-b.min).map(r=>`<tr><td><span class="bdg bdft">${r.min}\u2013${r.max}</span></td><td><strong>${esc(r.label)}</strong></td><td class="tm">${esc(r.description)}</td><td class="tm">${esc(r.recommendation)}</td></tr>`).join('')}</tbody></table>
+  </div>`).join('')}</div>`;
+}
+
+/* ══ BRAND ══ */
+function rBr(asm){
+  const b=gb(asm);
+  const CF=[['bc-p','Primary Color',b.primaryColor],['bc-bg','Page Background',b.bgColor],['bc-t','Body Text',b.textColor],['bc-s','Card / Surface',b.surfaceColor],['bc-b','Borders',b.borderColor]];
+  return `<div style="display:grid;grid-template-columns:1fr 310px;gap:24px;align-items:flex-start">
+    <div>
+      <div class="card mb3"><div class="ctit"><i class="ti ti-photo"></i> Logo</div>
+        <div class="fg" style="margin-bottom:6px"><label>Logo URL</label><input type="url" id="bc-logo" value="${esc(b.logoUrl)}" placeholder="https://..." oninput="upPv()"></div>
+        <div id="lp" style="${b.logoUrl?'':'display:none'};margin-top:6px">${b.logoUrl?`<img src="${esc(b.logoUrl)}" style="height:30px;object-fit:contain;border:1px solid var(--border);border-radius:6px;padding:5px;background:#f8fafc" onerror="this.style.display='none'" alt="">`:''}</div>
+      </div>
+      <div class="card mb3"><div class="ctit"><i class="ti ti-palette"></i> Colors</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          ${CF.map(([id,lbl,val])=>`<div class="fg" style="margin-bottom:0"><label>${lbl}</label>
+            <div class="crow"><input type="color" id="${id}" value="${esc(val)}" data-hex="${id}-hex"><input type="text" id="${id}-hex" value="${esc(val)}" style="font-family:monospace;font-size:12px;flex:1;width:auto" placeholder="#000000"></div>
+            <div class="swr">${SW.map(c=>`<div class="sw${val===c?' sl':''}" style="background:${c}" onclick="apSw('${id}','${c}')" title="${c}"></div>`).join('')}</div>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="card mb3"><div class="ctit"><i class="ti ti-typography"></i> Font</div>
+        <div class="fg" style="margin-bottom:0"><label>Font Family</label>
+          <select id="bc-f" onchange="upPv()">
+            <option value="system-ui, sans-serif" ${b.fontFamily==='system-ui, sans-serif'?'selected':''}>System Default</option>
+            <option value="Georgia, 'Times New Roman', serif" ${b.fontFamily.startsWith('Georgia')?'selected':''}>Georgia (Serif)</option>
+            <option value="'Trebuchet MS', Arial, sans-serif" ${b.fontFamily.startsWith("'Trebuchet")?'selected':''}>Trebuchet MS</option>
+            <option value="'Courier New', Courier, monospace" ${b.fontFamily.startsWith("'Courier")?'selected':''}>Courier New</option>
+          </select>
+        </div>
+      </div>
+      <div class="card mb3"><div class="ctit"><i class="ti ti-border-radius"></i> Corner Rounding</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="fg" style="margin-bottom:0"><label>Button Radius \u2014 <span id="bvb">${parseInt(b.btnRadius)||8}</span>px</label><input type="range" id="bc-br" min="0" max="50" value="${parseInt(b.btnRadius)||8}" oninput="document.getElementById('bvb').textContent=this.value;upPv()"></div>
+          <div class="fg" style="margin-bottom:0"><label>Card Radius \u2014 <span id="bvc">${parseInt(b.cardRadius)||12}</span>px</label><input type="range" id="bc-cr" min="0" max="32" value="${parseInt(b.cardRadius)||12}" oninput="document.getElementById('bvc').textContent=this.value;upPv()"></div>
+        </div>
+      </div>
+      <div class="fx g2"><button class="btn bp" onclick="svBr('${asm.id}')"><i class="ti ti-check"></i> Save Brand</button><button class="btn bs" onclick="rstBr('${asm.id}')"><i class="ti ti-refresh"></i> Reset</button></div>
+    </div>
+    <div class="bpb">
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:5px"><i class="ti ti-eye"></i> Live Preview</div>
+      <div id="bp">${mkPv(b)}</div>
+    </div>
+  </div>`;
+}
+function mkPv(b){const br=parseInt(b.btnRadius)||8;const cr=parseInt(b.cardRadius)||12;
+  return `<div style="background:${esc(b.bgColor)};padding:16px;font-family:${esc(b.fontFamily)}">
+    ${b.logoUrl?`<div style="margin-bottom:12px"><img src="${esc(b.logoUrl)}" style="height:20px;object-fit:contain" onerror="this.style.display='none'" alt=""></div>`:`<div style="height:4px;width:56px;background:${esc(b.primaryColor)};border-radius:2px;margin-bottom:12px;opacity:.5"></div>`}
+    <div style="background:${esc(b.surfaceColor)};border:1px solid ${esc(b.borderColor)};border-radius:${cr}px;padding:14px">
+      <div style="font-size:13px;font-weight:700;color:${esc(b.textColor)};margin-bottom:10px">Rank these by importance:</div>
+      ${['Leads & Marketing','Operations & Process','Leadership & Vision'].map((opt,i)=>`
+        <div style="border:1.5px solid ${i===0?b.primaryColor:b.borderColor};border-radius:${Math.max(0,cr-4)}px;padding:7px 10px;margin-bottom:5px;background:${i===0?b.primaryColor+'18':b.surfaceColor};display:flex;align-items:center;gap:8px">
+          <div style="width:22px;height:22px;border-radius:50%;background:${i===0?b.primaryColor:b.borderColor};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${i===0?'white':b.textColor};flex-shrink:0">${i+1}</div>
+          <div style="font-size:11px;color:${i===0?b.primaryColor:b.textColor};flex:1">${opt}</div>
+          <div style="opacity:.3;font-size:14px">\u2807</div>
+        </div>`).join('')}
+      <div style="margin-top:11px;text-align:right"><span style="display:inline-block;background:${esc(b.primaryColor)};color:#fff;padding:5px 14px;border-radius:${br}px;font-size:11px;font-weight:700">Next \u2192</span></div>
+    </div>
+    <div style="margin-top:9px;height:3px;background:${esc(b.borderColor)};border-radius:2px"><div style="width:55%;height:100%;background:${esc(b.primaryColor)};border-radius:2px"></div></div>
+  </div>`;}
+
+function rWH(asm){return `<div class="card" style="max-width:620px">
+  <div class="fg"><label>Webhook URL</label><input type="url" id="wh-u" value="${esc(asm.webhookUrl)}" placeholder="https://n8n.example.com/webhook/..."><p class="tm tsm mt2">POST fires on every submission and manual refire.</p></div>
+  <div class="fg"><label>Custom Headers (JSON)</label><textarea id="wh-h" rows="3" style="font-family:monospace;font-size:12px">${esc(asm.webhookHeaders)}</textarea></div>
+  <div class="fx g2"><button class="btn bp" onclick="svWH()"><i class="ti ti-check"></i> Save</button><button class="btn bs" onclick="tstWH()"><i class="ti ti-send"></i> Send Test</button></div>
+</div>`;}
+
+/* ══ RESULTS ══ */
+function rRes(){
+  const asm=gAsm();if(!asm)return`<div class="content"><p>Not found.</p></div>`;
+  const rs=gRs();const dims=gDs();
+  return `<div class="content">
+    <div class="ph"><div class="fx ic g3"><button class="btn bg bic" onclick="goTo('ed')"><i class="ti ti-arrow-left"></i></button><div><h1>${esc(asm.title)} \u2014 Results</h1><p class="tm tsm">${rs.length} submission${rs.length!==1?'s':''}</p></div></div>${asm.webhookUrl?`<button class="btn bs" onclick="rfAll()"><i class="ti ti-refresh"></i> Refire All</button>`:''}</div>
+    <div class="sgrid"><div class="scard"><div class="slbl">Total</div><div class="sval">${rs.length}</div></div><div class="scard"><div class="slbl">Webhook OK</div><div class="sval grn">${rs.filter(r=>r.webhookStatus==='success').length}</div></div><div class="scard"><div class="slbl">Webhook Err</div><div class="sval red">${rs.filter(r=>r.webhookStatus==='error').length}</div></div><div class="scard"><div class="slbl">Dimensions</div><div class="sval">${dims.length}</div></div></div>
+    ${!rs.length?`<div class="empty"><i class="ti ti-users"></i><p>No responses yet.<br><button class="btn bp bsm mt3" onclick="prvAsm('${asm.id}')">Try it</button></p></div>`
+    :`<div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th>Submitted</th><th>Name</th><th>Email</th><th>Top Dimension</th><th>Webhook</th><th>Actions</th></tr></thead><tbody>
+    ${rs.map(r=>{const topId=(r.tiedTop||[])[0];const td=dims.find(d=>d.id===topId);const ws=r.webhookStatus;
+      const wi=ws==='success'?'ti-circle-check':ws==='error'?'ti-alert-circle':ws==='pending'?'ti-clock':'ti-minus';
+      const wc=ws==='success'?'color:var(--ok)':ws==='error'?'color:var(--err)':'color:var(--muted)';
+      return `<tr><td class="tm tsm">${fd(r.createdAt)}</td><td><strong>${esc(r.contact?.['Full Name']||Object.values(r.contact||{})[0]||'\u2014')}</strong></td><td class="tm">${esc(r.contact?.['Email Address']||Object.values(r.contact||{})[1]||'\u2014')}</td>
+        <td>${td?`<div class="fx ic g1"><div style="width:9px;height:9px;border-radius:50%;background:${esc(td.color||'#94a3b8')}"></div><span class="tsm">${esc(td.name)}</span>${(r.tiedTop||[]).length>1?`<span class="bdg byw" style="margin-left:3px">Tied</span>`:''}</div>`:'—'}</td>
+        <td><div class="fx ic g1"><i class="ti ${wi}" style="${wc}"></i><span class="tsm" style="${wc}">${ws||'not sent'}</span></div>${r.webhookFiredAt?`<div class="tm" style="font-size:11px">${fd(r.webhookFiredAt)}</div>`:''}</td>
+        <td><div class="fx g1"><button class="btn bs bsm" onclick="opRM('${r.id}')"><i class="ti ti-eye"></i> View</button>${asm.webhookUrl?`<button class="btn bg bsm" id="rfb-${r.id}" onclick="rfOne('${r.id}')"><i class="ti ti-refresh"></i></button>`:''}</div></td>
+      </tr>`;}).join('')}</tbody></table></div>`}
+  </div>`;
+}
+
+/* ══ TAKE ══ */
+function rTake(){
+  const asm=gAsm();if(!asm)return`<p>Not found.</p>`;
+  const qs=orderedQs();if(!qs.length)return`<div style="text-align:center;padding:60px"><p>No questions yet.</p><button class="btn bp mt3" onclick="goTo('ed')">Back to Editor</button></div>`;
+  const b=gb(asm);const q=qs[S.step];const pct=Math.round((S.step/qs.length)*100);
+  const br=parseInt(b.btnRadius)||8;const cr=parseInt(b.cardRadius)||12;
+  return `<div class="tw-wrap" style="background:${esc(b.bgColor)};font-family:${esc(b.fontFamily)}">
+    <style>.hopt:hover{border-color:${esc(b.primaryColor)}!important;background:${esc(b.primaryColor)}12!important}</style>
+    <div class="tw-bar" style="background:${esc(b.surfaceColor)};border-bottom:1px solid ${esc(b.borderColor)}">
+      <div style="max-width:640px;margin:0 auto;padding:12px 20px">
+        <div class="fx ic jb">
+          ${b.logoUrl?`<img src="${esc(b.logoUrl)}" style="height:24px;object-fit:contain" onerror="this.style.display='none'" alt="">`:`<div style="font-weight:700;font-size:13px;color:${esc(b.primaryColor)}">${esc(asm.title)}</div>`}
+          <div class="fx ic g2">${S.preview?`<span class="bdg byw"><i class="ti ti-eye"></i> Preview</span>`:''}<span style="font-size:12px;color:${esc(b.textColor)};opacity:.5">${S.step+1} / ${qs.length}</span></div>
+        </div>
+        <div class="tw-prog mt2" style="background:${esc(b.borderColor)}"><div class="tw-pf" style="width:${pct}%;background:${esc(b.primaryColor)}"></div></div>
+      </div>
+    </div>
+    <div class="tw-body">${rQ(q,b,cr,br)}</div>
+    <div class="tw-nav" style="background:${esc(b.surfaceColor)};border-top:1px solid ${esc(b.borderColor)}">
+      <div class="tw-ni">
+        <button class="tg" style="color:${esc(b.textColor)}" onclick="pvSt()" ${S.step===0?'disabled':''}><i class="ti ti-arrow-left"></i> Back</button>
+        <div class="pdots">${qs.map((_,i)=>`<div class="pdot" style="${i===S.step?'background:'+b.primaryColor:i<S.step?'background:'+b.primaryColor+';opacity:.3':''}"></div>`).join('')}</div>
+        <button class="tp" onclick="nxSt()" style="background:${esc(b.primaryColor)};border-radius:${br}px">${S.step===qs.length-1?'<i class="ti ti-check"></i> Submit':'Next <i class="ti ti-arrow-right"></i>'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function rQ(q,b,cr,br){
+  const cs=`background:${esc(b.surfaceColor)};border:1px solid ${esc(b.borderColor)};border-radius:${cr}px;`;
+  if(q.type==='instruction')return`<div class="qcard" style="${cs}"><h2 style="font-size:22px;font-weight:700;color:${esc(b.textColor)};margin-bottom:12px">${esc(q.title)}</h2><p style="font-size:15px;line-height:1.75;color:${esc(b.textColor)};opacity:.7">${esc(q.description)}</p></div>`;
+  if(q.type==='contact_form'){
+    return `<div class="qcard" style="${cs}"><h2 style="font-size:19px;font-weight:700;color:${esc(b.textColor)};margin-bottom:14px">${esc(q.title)}</h2>
+    ${(q.contactFields||[]).map(f=>`<div style="margin-bottom:12px"><label style="display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:${esc(b.textColor)};opacity:.5;margin-bottom:4px">${esc(f.label)}${f.required?' *':''}</label>
+      <input type="${esc(f.type||'text')}" id="cf-${esc(f.id)}" value="${esc(S.contact[f.label]||'')}" placeholder="${esc(f.label)}" style="width:100%;padding:10px 12px;border:1px solid ${esc(b.borderColor)};border-radius:${Math.max(2,br-2)}px;font-size:14px;font-family:inherit;color:${esc(b.textColor)};background:${esc(b.bgColor)};outline:none" oninput="S.contact['${esc(f.label)}']=this.value"></div>`).join('')}</div>`;
+  }
+  if(q.type==='ranking'){
+    const opts=q.options||[];
+    if(!Array.isArray(S.answers[q.id])||S.answers[q.id].length!==opts.length)S.answers[q.id]=opts.map(o=>o.id);
+    const order=S.answers[q.id];const oMap=Object.fromEntries(opts.map(o=>[o.id,o]));const n=order.length;
+    return `<div class="qcard" style="${cs}">
+      <h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:6px">${esc(q.title)}</h2>
+      <p style="font-size:13px;color:${esc(b.textColor)};opacity:.55;margin-bottom:18px">${esc(q.description)||'Drag to reorder \u2014 most important at the top'}</p>
+      <div class="rank-list">
+        ${order.map((optId,idx)=>{const opt=oMap[optId]||{text:optId};
+          return `<div class="rank-item" data-opt="${optId}" draggable="true"
+            ondragstart="dSt(event,'${q.id}','${optId}')" ondragover="dOv(event,'${q.id}','${optId}')"
+            ondrop="dDr(event,'${q.id}','${optId}')" ondragend="dEnd()"
+            style="border-color:${idx===0?b.primaryColor:b.borderColor};background:${idx===0?b.primaryColor+'14':b.surfaceColor}">
+            <div class="rank-num" style="background:${idx===0?b.primaryColor:b.borderColor};color:${idx===0?'#fff':b.textColor}">${idx+1}</div>
+            <div class="rank-hdl" style="color:${b.textColor}">\u2807</div>
+            <div class="rank-txt" style="color:${idx===0?b.primaryColor:b.textColor}">${esc(opt.text)}</div>
+            <div class="rank-arr">
+              <button class="rarr" onclick="mvRk('${q.id}','${optId}',-1)" ${idx===0?'disabled':''} style="color:${b.textColor}"><i class="ti ti-chevron-up" style="font-size:13px"></i></button>
+              <button class="rarr" onclick="mvRk('${q.id}','${optId}',1)" ${idx===n-1?'disabled':''} style="color:${b.textColor}"><i class="ti ti-chevron-down" style="font-size:13px"></i></button>
+            </div>
+          </div>`;}).join('')}
+      </div>
+      <p style="font-size:11px;color:${esc(b.textColor)};opacity:.35;margin-top:12px;text-align:center"><i class="ti ti-arrows-up-down" style="font-size:12px"></i> Drag or use arrows to reorder</p>
+    </div>`;
+  }
+  if(q.type==='multiple_choice'){
+    const sel=S.answers[q.id];
+    return `<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:16px">${esc(q.title)}</h2>
+    ${(q.options||[]).map(opt=>`<button class="opt-btn hopt" onclick="slOp('${q.id}','${opt.id}')" style="border-color:${sel===opt.id?b.primaryColor:b.borderColor};background:${sel===opt.id?b.primaryColor+'18':b.surfaceColor};color:${sel===opt.id?b.primaryColor:b.textColor};border-radius:${Math.max(0,cr-4)}px">
+      <div class="opt-c" style="border-color:${sel===opt.id?b.primaryColor:b.borderColor+'77'};background:${sel===opt.id?b.primaryColor:'transparent'}">${sel===opt.id?`<div style="width:7px;height:7px;border-radius:50%;background:white"></div>`:''}</div>${esc(opt.text)}</button>`).join('')}</div>`;
+  }
+  if(q.type==='multi_select'){
+    const sel=Array.isArray(S.answers[q.id])?S.answers[q.id]:[];
+    return `<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:4px">${esc(q.title)}</h2><p style="font-size:13px;color:${esc(b.textColor)};opacity:.5;margin-bottom:16px">Select all that apply</p>
+    ${(q.options||[]).map(opt=>{const is=sel.includes(opt.id);return`<button class="opt-btn hopt" onclick="tgMs('${q.id}','${opt.id}')" style="border-color:${is?b.primaryColor:b.borderColor};background:${is?b.primaryColor+'18':b.surfaceColor};color:${is?b.primaryColor:b.textColor};border-radius:${Math.max(0,cr-4)}px"><div class="opt-ck" style="border-color:${is?b.primaryColor:b.borderColor+'77'};background:${is?b.primaryColor:'transparent'}">${is?`<i class="ti ti-check" style="font-size:11px;color:white"></i>`:''}</div>${esc(opt.text)}</button>`;}).join('')}</div>`;
+  }
+  if(q.type==='text')return`<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:16px">${esc(q.title)}</h2><textarea rows="5" placeholder="Your answer..." oninput="S.answers['${q.id}']=this.value" style="width:100%;padding:12px;border:1px solid ${esc(b.borderColor)};border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;color:${esc(b.textColor)};background:${esc(b.bgColor)};outline:none">${esc(S.answers[q.id]||'')}</textarea></div>`;
+  return '';
+}
+
+/* ══ COMPLETE ══ */
+function rComplete(){
+  const asm=gAsm();if(!asm||!S.doneResp)return`<div style="text-align:center;padding:60px"><p>No results.</p></div>`;
+  const b=gb(asm);const dims=gDs();const resp=S.doneResp;const qs=orderedQs();
+  const cr=parseInt(b.cardRadius)||12;const br=parseInt(b.btnRadius)||8;
+  return `<div class="cw" style="background:${esc(b.bgColor)};font-family:${esc(b.fontFamily)}">
+    <div class="ci">
+      ${b.logoUrl?`<div style="text-align:center;margin-bottom:22px"><img src="${esc(b.logoUrl)}" style="height:32px;object-fit:contain" onerror="this.style.display='none'" alt=""></div>`:''}
+      <div style="background:${esc(b.surfaceColor)};border:1px solid ${esc(b.borderColor)};border-radius:${cr}px;padding:28px;margin-bottom:14px;text-align:center">
+        <div style="width:52px;height:52px;border-radius:50%;background:${esc(b.primaryColor)}22;display:flex;align-items:center;justify-content:center;margin:0 auto 14px"><i class="ti ti-check" style="font-size:26px;color:${esc(b.primaryColor)}"></i></div>
+        <h1 style="font-size:22px;font-weight:700;color:${esc(b.textColor)};margin-bottom:8px">Your Results Are In</h1>
+        <p style="font-size:14px;color:${esc(b.textColor)};opacity:.65">Your personalized breakdown across each dimension.</p>
+        ${(resp.tiedTop||[]).length>1?`<div style="margin-top:12px;padding:5px 16px;background:${esc(b.primaryColor)}18;border-radius:20px;display:inline-block;font-size:12px;color:${esc(b.primaryColor)};font-weight:700">Tied results across ${resp.tiedTop.length} dimensions</div>`:''}
+      </div>
+      ${dims.map(d=>{const score=resp.scores?.[d.id]||0;const mx=mxSc(qs,d.id);const pct=Math.min(100,Math.round((score/mx)*100));const rank=resp.ranks?.[d.id];const isTied=(resp.tiedTop||[]).includes(d.id);
+        return `<div class="dr" style="border-color:${isTied?b.primaryColor:b.borderColor};${isTied?'box-shadow:0 0 0 2px '+b.primaryColor:''}">
+          <div class="fx ic jb mb2"><div class="fx ic g2"><div style="width:10px;height:10px;border-radius:50%;background:${esc(d.color||b.primaryColor)}"></div><strong style="color:${esc(b.textColor)}">${esc(d.name)}</strong>${isTied?`<span style="background:${esc(b.primaryColor)};color:white;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">\u2605 Top${(resp.tiedTop||[]).length>1?' (Tied)':''}</span>`:''}</div>${rank?`<span style="color:${esc(d.color||b.primaryColor)};font-size:13px;font-weight:700">${esc(rank.label)}</span>`:''}</div>
+          <div class="sbb" style="background:${esc(b.borderColor)}"><div class="sbf" style="width:${pct}%;background:${esc(d.color||b.primaryColor)}"></div></div>
+          <div style="font-size:11px;color:${esc(b.textColor)};opacity:.4;margin-bottom:10px">${score} pts (${pct}%)</div>
+          ${rank?.description?`<p style="font-size:14px;color:${esc(b.textColor)};font-weight:500;margin-bottom:8px">${esc(rank.description)}</p>`:''}
+          ${rank?.recommendation?`<div style="background:${esc(b.bgColor)};border-left:3px solid ${esc(d.color||b.primaryColor)};padding:9px 13px;border-radius:0 6px 6px 0;font-size:13px;color:${esc(b.textColor)};line-height:1.5"><strong>Next step:</strong> ${esc(rank.recommendation)}</div>`:''}
+        </div>`;}).join('')}
+      <div style="text-align:center;margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        ${S.preview?`<button onclick="goTo('ed')" style="background:${esc(b.primaryColor)};color:white;border:none;padding:11px 22px;border-radius:${br}px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit"><i class="ti ti-arrow-left"></i> Back to Editor</button>`:''}
+        <button onclick="rstA()" style="background:transparent;color:${esc(b.textColor)};border:1px solid ${esc(b.borderColor)};padding:11px 22px;border-radius:${br}px;font-size:14px;cursor:pointer;font-family:inherit">Retake Assessment</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ══ MODALS ══ */
+function rMod(){if(!S.modal)return'';const t=S.modal.type;if(t==='q')return rQMod();if(t==='sec')return rSecMod();if(t==='dim')return rDimMod();if(t==='r')return rRMod();return'';}
+
+/* ── QUESTION MODAL ── */
+function rQMod(){
+  const q=S.modal.data;const secId=S.modal.secId;
+  const activeDims=getActiveDims(secId||q.sectionId);
+  const scored=q.type==='multiple_choice'||q.type==='multi_select'||q.type==='ranking';
+
+  // Position weights section (ranking only)
+  let pwHtml='';
+  if(q.type==='ranking'){
+    const opts=q.options||[];const n=opts.length;
+    const weights=q.positionWeights&&q.positionWeights.length===n?q.positionWeights:Array.from({length:n},(_,i)=>n-i);
+    pwHtml=`<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;background:var(--bg)">
+      <div class="fx ic jb mb2"><div class="fgl" style="display:inline">Position Weights</div><span class="bdg bpur">Auto-generated per item count</span></div>
+      <p class="tm tsm mb3">Rank #1 contributes the most. Edit weights to reflect how much earlier positions matter.</p>
+      ${n===0?`<p class="tm tsm">Add items below to generate position weights.</p>`:`<div class="pw-grid">${weights.map((w,i)=>`<div class="pw-item"><div class="pw-label">Rank #${i+1}</div><input type="number" value="${w}" min="0" max="999" onchange="updPW(${i},this.value)" style="text-align:center;font-size:16px;font-weight:700;border:none;background:transparent;padding:2px;outline:none;color:var(--primary);width:100%"></div>`).join('')}</div>`}
+    </div>`;
+  }
+
+  // Options / items section
+  let optsHtml='';
+  if(scored){
+    const opts=q.options||[];
+    const typeLabel=q.type==='ranking'?'Rank Items':'Answer Options';
+    optsHtml=`<div>
+      <div class="fx ic jb mb3"><div class="fgl" style="display:inline">${typeLabel}</div><button class="btn bs bsm" onclick="addOpt()"><i class="ti ti-plus"></i> Add ${q.type==='ranking'?'Item':'Option'}</button></div>
+      ${!activeDims.length?`<div class="ib"><i class="ti ti-info-circle" style="flex-shrink:0"></i> Add dimensions to this section (via Section Settings) to enable scoring.</div>`:''}
+      <div id="opts-list">
+        ${opts.map((opt,oi)=>rOptBlock(opt,oi,activeDims,q.type)).join('')}
+        ${!opts.length?`<p class="tm tsm" style="text-align:center;padding:16px">No ${q.type==='ranking'?'items':'options'} yet. Add one above.</p>`:''}
+      </div>
+    </div>`;
+  }
+  if(q.type==='contact_form'){
+    const cfs=q.contactFields||[];
+    optsHtml=`<div class="fg"><div class="fx ic jb mb2"><label style="margin-bottom:0">Contact Fields</label><button class="btn bs bsm" onclick="addCF()"><i class="ti ti-plus"></i> Add Field</button></div>
+    ${cfs.map((f,i)=>`<div class="cfr"><input type="text" value="${esc(f.label)}" onchange="updCF(${i},'label',this.value)" placeholder="Label" style="flex:2"><select onchange="updCF(${i},'type',this.value)" style="flex:1"><option value="text" ${f.type==='text'?'selected':''}>Text</option><option value="email" ${f.type==='email'?'selected':''}>Email</option><option value="tel" ${f.type==='tel'?'selected':''}>Phone</option></select><label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;cursor:pointer"><input type="checkbox" ${f.required?'checked':''} onchange="updCF(${i},'required',this.checked)"> Req</label><button class="btn bd bic bsm" onclick="rmCF(${i})"><i class="ti ti-trash"></i></button></div>`).join('')}</div>`;
+  }
+
+  return `<div class="mov" onclick="bgC(event)"><div class="modal mw">
+    <div class="mhd"><h2>${q._new?'Add Question':'Edit Question'}</h2><button class="btn bg bic" onclick="clM()"><i class="ti ti-x"></i></button></div>
+    <div class="mbd">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="fg"><label>Question Type</label><select id="qm-t" onchange="chQT(this.value)">${Object.entries(QLA).map(([v,l])=>`<option value="${v}" ${q.type===v?'selected':''}>${l}</option>`).join('')}</select></div>
+        <div class="fg"><label>Section</label><select id="qm-sec" onchange="S.modal.secId=this.value;render()">
+          ${gSecs().map(s=>`<option value="${s.id}" ${(secId||q.sectionId)===s.id?'selected':''}>${esc(s.title)}</option>`).join('')}
+          <option value="" ${!secId&&!q.sectionId?'selected':''}>Ungrouped</option>
+        </select></div>
+      </div>
+      <div class="fg"><label>${q.type==='instruction'?'Block Title':'Question / Prompt'}</label><input type="text" id="qm-ti" value="${esc(q.title||'')}" placeholder="What do you want to ask?"></div>
+      <div class="fg"><label>Description / Subtext (optional)</label><textarea id="qm-de" rows="2">${esc(q.description||'')}</textarea></div>
+      ${q.type!=='instruction'?`<label class="tw mb4" style="display:inline-flex"><input type="checkbox" id="qm-rq" ${q.required!==false?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Required</span></label>`:''}
+      ${pwHtml}
+      ${optsHtml}
+    </div>
+    <div class="mft"><button class="btn bs" onclick="clM()">Cancel</button><button class="btn bp" onclick="svQ()"><i class="ti ti-check"></i> Save Question</button></div>
+  </div></div>`;
+}
+
+function rOptBlock(opt,oi,activeDims,qType){
+  const scores=opt.scores||{};
+  const scoreEntries=Object.entries(scores).filter(([k])=>k);
+  return `<div class="opt-block">
+    <div class="opt-block-head">
+      <div class="opt-block-num">${oi+1}</div>
+      <input type="text" value="${esc(opt.text)}" onchange="updOT(${oi},this.value)" style="flex:1;font-size:13.5px;font-weight:500" placeholder="${qType==='ranking'?'Item to rank...':'Option text...'}">
+      <button class="btn bd bic bsm" onclick="rmO(${oi})"><i class="ti ti-trash"></i></button>
+    </div>
+    ${activeDims.length?`<div>
+      ${scoreEntries.map(([dimId,score],si)=>{
+        const dim=activeDims.find(d=>d.id===dimId);
+        return `<div class="score-row">
+          <select onchange="updODim(${oi},'${dimId}',this.value)" style="flex:1;min-width:0">
+            ${activeDims.map(d=>`<option value="${d.id}" ${d.id===dimId?'selected':''}>${esc(d.name)}</option>`).join('')}
+          </select>
+          <input type="number" value="${score}" min="0" max="999" onchange="updOScore(${oi},'${dimId}',this.value)" style="width:70px;text-align:center">
+          <button class="btn bd bic bsm" onclick="rmODim(${oi},'${dimId}')"><i class="ti ti-x"></i></button>
+        </div>`;}).join('')}
+      <button class="btn bg bsm mt2" onclick="addODim(${oi})" style="font-size:12px"><i class="ti ti-plus"></i> Add Dimension</button>
+    </div>`:`<p class="tm tsm" style="font-size:11px;margin-top:6px">No active dimensions for this section</p>`}
+  </div>`;
+}
+
+/* ── SECTION MODAL ── */
+function rSecMod(){
+  const sec=S.modal.data;const dims=gDs();const active=sec.activeDimIds||[];
+  return `<div class="mov" onclick="bgC(event)"><div class="modal">
+    <div class="mhd"><h2>${sec._new?'New Section':'Section Settings'}</h2><button class="btn bg bic" onclick="clM()"><i class="ti ti-x"></i></button></div>
+    <div class="mbd">
+      <div class="fg"><label>Section Title</label><input type="text" id="sec-t" value="${esc(sec.title||'')}" placeholder="e.g. Growth Priorities, Current Reality, Skills Assessment"></div>
+      <div class="fg"><label>Description (optional)</label><input type="text" id="sec-d" value="${esc(sec.description||'')}" placeholder="Brief note about this section's focus"></div>
+      <div class="fg">
+        <div class="fx ic jb mb2">
+          <label style="margin-bottom:0">Active Dimensions</label>
+          <div class="fx g2">
+            <button class="btn bg bsm" onclick="selAllDims(true)">Select All</button>
+            <button class="btn bg bsm" onclick="selAllDims(false)">Clear All</button>
+          </div>
+        </div>
+        <p class="tm tsm mb3">Only these dimensions will appear in scoring dropdowns for questions in this section. Leave all unchecked to show all dimensions.</p>
+        ${!dims.length?`<div class="ib"><i class="ti ti-info-circle"></i> No dimensions created yet. Go to the Dimensions tab to add some.</div>`:`<div class="dim-checks" id="dim-checks">
+          ${dims.map(d=>`<label class="dc-item"><input type="checkbox" value="${d.id}" ${active.includes(d.id)?'checked':''}>
+            <div style="width:11px;height:11px;border-radius:50%;background:${esc(d.color||'#94a3b8')};flex-shrink:0"></div>
+            <div><div class="dc-label">${esc(d.name)}</div>${d.description?`<div class="dc-sub">${esc(d.description)}</div>`:''}</div>
+          </label>`).join('')}
+        </div>`}
+      </div>
+    </div>
+    <div class="mft"><button class="btn bs" onclick="clM()">Cancel</button><button class="btn bp" onclick="svSec()"><i class="ti ti-check"></i> Save Section</button></div>
+  </div></div>`;
+}
+
+/* ── DIMENSION MODAL ── */
+function rDimMod(){
+  const d=S.modal.data;
+  return `<div class="mov" onclick="bgC(event)"><div class="modal mw">
+    <div class="mhd"><h2>${d._new?'Add Dimension':'Edit Dimension'}</h2><button class="btn bg bic" onclick="clM()"><i class="ti ti-x"></i></button></div>
+    <div class="mbd">
+      <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end;margin-bottom:12px">
+        <div class="fg" style="margin-bottom:0"><label>Dimension Name</label><input type="text" id="dm-n" value="${esc(d.name||'')}" placeholder="e.g. Marketing, Leadership, Technical Skills"></div>
+        <div class="fg" style="margin-bottom:0"><label>Color</label><div style="display:flex;align-items:center;gap:6px"><input type="color" id="dm-c" value="${esc(d.color||'#3b82f6')}"><div class="swr">${SW.map(c=>`<div class="sw ${d.color===c?'sl':''}" style="background:${c}" onclick="document.getElementById('dm-c').value='${c}'"></div>`).join('')}</div></div></div>
+      </div>
+      <div class="fg"><label>Description (optional)</label><input type="text" id="dm-d" value="${esc(d.description||'')}" placeholder="What this measures"></div>
+      <div class="fx ic jb mb2 mt2"><div><span class="fgl" style="display:inline">Score Ranges</span><p class="tm tsm mt1">Define what each score total means. Higher ranges accommodate ranking weight multipliers.</p></div><button class="btn bs bsm" onclick="addRng()"><i class="ti ti-plus"></i> Add Range</button></div>
+      <div id="rl">${(d.ranges||[]).sort((a,b)=>a.min-b.min).map((r,i)=>rRR(r,i)).join('')}${!(d.ranges||[]).length?'<p class="tm tsm">No ranges yet.</p>':''}</div>
+    </div>
+    <div class="mft"><button class="btn bs" onclick="clM()">Cancel</button><button class="btn bp" onclick="svDim()"><i class="ti ti-check"></i> Save Dimension</button></div>
+  </div></div>`;
+}
+
+function rRR(r,i){return `<div class="rrow">
+  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Min</label><input type="number" value="${r.min||0}" onchange="updR(${i},'min',this.value)" style="text-align:center"></div>
+  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Max</label><input type="number" value="${r.max||10}" onchange="updR(${i},'max',this.value)" style="text-align:center"></div>
+  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Label</label><input type="text" value="${esc(r.label||'')}" onchange="updR(${i},'label',this.value)" placeholder="e.g. Emerging"></div>
+  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Description</label><input type="text" value="${esc(r.description||'')}" onchange="updR(${i},'description',this.value)" placeholder="What this means..."></div>
+  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Recommendation</label><input type="text" value="${esc(r.recommendation||'')}" onchange="updR(${i},'recommendation',this.value)" placeholder="Next step..."></div>
+  <button class="btn bd bic bsm" onclick="rmR(${i})" style="align-self:flex-end"><i class="ti ti-trash"></i></button>
+</div>`;}
+
+/* ── RESPONSE MODAL ── */
+function rRMod(){
+  const resp=S.modal.data;const dims=gDs();const asm=gAsm();const qs=orderedQs();
+  return `<div class="mov" onclick="bgC(event)"><div class="modal mw">
+    <div class="mhd"><h2>Response Detail</h2><div class="fx g2">${asm?.webhookUrl?`<button class="btn bs bsm" onclick="rfFromM('${resp.id}')"><i class="ti ti-refresh"></i> Refire</button>`:''}<button class="btn bg bic" onclick="clM()"><i class="ti ti-x"></i></button></div></div>
+    <div class="mbd">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div><p class="fgl mb2">Contact</p>${Object.entries(resp.contact||{}).map(([k,v])=>`<div class="fx mb2 g2"><span class="tm tsm" style="min-width:100px">${esc(k)}</span><strong class="tsm">${esc(v)}</strong></div>`).join('')||'<p class="tm tsm">No contact data</p>'}<p class="tm tsm mt2">Submitted: ${fd(resp.createdAt)}</p></div>
+        <div><p class="fgl mb2">Webhook</p><div class="fx ic g1 mb2"><i class="ti ${resp.webhookStatus==='success'?'ti-circle-check':'ti-minus'}" style="${resp.webhookStatus==='success'?'color:var(--ok)':'color:var(--muted)'}"></i><span class="tsm">${esc(resp.webhookStatus||'Not sent')}</span></div></div>
+      </div>
+      <p class="fgl mb2">Scores</p>
+      ${dims.map(d=>{const score=resp.scores?.[d.id]||0;const rank=resp.ranks?.[d.id];const isTied=(resp.tiedTop||[]).includes(d.id);const mx=mxSc(qs,d.id);const pct=Math.min(100,Math.round((score/mx)*100));
+        return `<div style="padding:12px;border-radius:8px;margin-bottom:8px;border-left:4px solid ${esc(d.color||'#94a3b8')};background:var(--bg)">
+          <div class="fx ic jb mb2"><div class="fx ic g2"><div style="width:9px;height:9px;border-radius:50%;background:${esc(d.color||'#94a3b8')}"></div><strong>${esc(d.name)}</strong>${isTied?`<span class="bdg bbl">Top</span>`:''}</div><div class="fx g2 ic">${rank?`<span class="bdg bdft">${esc(rank.label)}</span>`:''}<span class="tm tsm">${score} pts</span></div></div>
+          <div class="sbb"><div class="sbf" style="width:${pct}%;background:${esc(d.color||'#94a3b8')}"></div></div>
+          ${rank?.recommendation?`<p class="tsm tm mt2"><strong>Rec:</strong> ${esc(rank.recommendation)}</p>`:''}
+        </div>`;}).join('')}
+    </div>
+  </div></div>`;
+}
+
+/* ══ ACTIONS ══ */
+function goTo(v){S.view=v;render();}
+function stTab(t){S.tab=t;render();}
+function togSec(id){S.expandedSecs[id]=S.expandedSecs[id]===false?true:false;render();}
+
+async function crtAsm(){
+  const id=uid();
+  const asm={id,title:'New Assessment',description:'',status:'draft',brand:{...DB0},webhookUrl:'',webhookHeaders:'{"Content-Type":"application/json"}',showResults:true,createdAt:now()};
+  db.assessments.push(asm);db.questions[id]=[];db.dimensions[id]=[];
+  if(!db.sections)db.sections={};db.sections[id]=[];db.responses[id]=[];
+  if(_session&&_tenantId)await sbUpsert('ab_assessments',asmToDb(asm)).catch(console.error);
+  sv();S.asmId=id;S.tab='gen';S.view='ed';render();
+}
+function edAsm(id){S.asmId=id;S.tab='gen';S.view='ed';render();}
+function vwRes(id){S.asmId=id;S.view='res';render();}
+function prvAsm(id){S.asmId=id;S.preview=true;S.step=0;S.answers={};S.contact={};S.view='take';render();}
+async function dlAsm(id){if(!confirm('Delete this assessment and all responses?'))return;db.assessments=db.assessments.filter(a=>a.id!==id);delete db.questions[id];delete db.dimensions[id];if(db.sections)delete db.sections[id];delete db.responses[id];if(S.asmId===id){S.asmId=null;S.view='home';}sv();render();if(_session)sbDel('ab_assessments',id).catch(console.error);}
+function togSt(id){const a=db.assessments.find(a=>a.id===id);if(a){a.status=a.status==='published'?'draft':'published';sv();render();}}
+function svGen(){const a=db.assessments.find(a=>a.id===S.asmId);if(!a)return;a.title=document.getElementById('g-t').value;a.description=document.getElementById('g-d').value;a.status=document.getElementById('g-s').value;a.showResults=document.getElementById('g-sh').checked;sv();toast('Saved!');render();}
+
+/* Sections */
+function opSecMod(secId){
+  if(secId){const s=gSecs().find(s=>s.id===secId);S.modal={type:'sec',data:JSON.parse(JSON.stringify(s))};}
+  else S.modal={type:'sec',data:{_new:true,id:uid(),aId:S.asmId,title:'',description:'',orderIndex:gSecs().length,activeDimIds:[]}};
+  render();
+}
+function svSec(){
+  const s={...S.modal.data};
+  s.title=document.getElementById('sec-t')?.value??s.title;
+  s.description=document.getElementById('sec-d')?.value??s.description;
+  s.activeDimIds=Array.from(document.querySelectorAll('#dim-checks input[type=checkbox]:checked')).map(el=>el.value);
+  delete s._new;
+  if(!db.sections)db.sections={};
+  if(!db.sections[S.asmId])db.sections[S.asmId]=[];
+  const secs=db.sections[S.asmId];const i=secs.findIndex(x=>x.id===s.id);
+  if(i>=0)secs[i]=s;else secs.push(s);
+  sv();S.modal=null;render();
+}
+function dlSec(secId){
+  if(!confirm('Delete section? Questions will become ungrouped.'))return;
+  if(db.sections?.[S.asmId])db.sections[S.asmId]=db.sections[S.asmId].filter(s=>s.id!==secId);
+  (db.questions[S.asmId]||[]).forEach(q=>{if(q.sectionId===secId)q.sectionId=null;});
+  sv();render();
+}
+function selAllDims(checked){document.querySelectorAll('#dim-checks input[type=checkbox]').forEach(el=>el.checked=checked);}
+
+/* Questions */
+function opQM(qId,secId){
+  const dims=gDs();
+  if(qId){const q=(db.questions[S.asmId]||[]).find(q=>q.id===qId);S.modal={type:'q',data:JSON.parse(JSON.stringify(q)),secId:secId||q.sectionId||''};}
+  else{const scores=Object.fromEntries(dims.slice(0,1).map(d=>[d.id,0]));S.modal={type:'q',secId:secId||'',data:{_new:true,id:uid(),aId:S.asmId,sectionId:secId||null,type:'ranking',title:'',description:'',required:true,orderIndex:(db.questions[S.asmId]||[]).length,positionWeights:[],options:[],contactFields:[]}};}
+  render();
+}
+function chQT(t){S.modal.data.type=t;if(!S.modal.data.options)S.modal.data.options=[];if(!S.modal.data.contactFields)S.modal.data.contactFields=[];render();}
+
+function addOpt(){
+  const d=S.modal.data;const opts=d.options||[];
+  const n=opts.length+1;
+  // Extend positionWeights for ranking
+  if(d.type==='ranking'){const pw=d.positionWeights||[];if(pw.length<n)pw.push(Math.max(1,n-pw.length));d.positionWeights=pw;}
+  d.options=[...opts,{id:uid(),text:'',scores:{}}];render();
+}
+function rmO(i){
+  const d=S.modal.data;d.options.splice(i,1);
+  if(d.type==='ranking'&&d.positionWeights)d.positionWeights=d.positionWeights.slice(0,d.options.length);
+  render();
+}
+function updOT(i,v){if(S.modal.data.options[i])S.modal.data.options[i].text=v;}
+function updPW(i,v){if(!S.modal.data.positionWeights)S.modal.data.positionWeights=[];S.modal.data.positionWeights[i]=Number(v)||0;}
+function addODim(oi){
+  const opt=S.modal.data.options[oi];if(!opt)return;
+  const activeDims=getActiveDims(S.modal.secId||S.modal.data.sectionId);
+  const usedIds=Object.keys(opt.scores||{});
+  const next=activeDims.find(d=>!usedIds.includes(d.id));
+  if(!next){toast('All section dimensions already added','err');return;}
+  if(!opt.scores)opt.scores={};
+  opt.scores[next.id]=0;render();
+}
+function updODim(oi,oldDimId,newDimId){
+  const opt=S.modal.data.options[oi];if(!opt||!opt.scores)return;
+  const oldVal=opt.scores[oldDimId]||0;
+  delete opt.scores[oldDimId];
+  if(!opt.scores[newDimId])opt.scores[newDimId]=oldVal;
+  render();
+}
+function updOScore(oi,dimId,v){const opt=S.modal.data.options[oi];if(opt){if(!opt.scores)opt.scores={};opt.scores[dimId]=Number(v)||0;}}
+function rmODim(oi,dimId){const opt=S.modal.data.options[oi];if(opt?.scores)delete opt.scores[dimId];render();}
+
+function addCF(){S.modal.data.contactFields=[...(S.modal.data.contactFields||[]),{id:uid(),label:'',type:'text',required:false}];render();}
+function updCF(i,k,v){if(S.modal.data.contactFields[i])S.modal.data.contactFields[i][k]=v;}
+function rmCF(i){S.modal.data.contactFields.splice(i,1);render();}
+
+function svQ(){
+  const q={...S.modal.data};
+  q.title=document.getElementById('qm-ti')?.value??q.title;
+  q.description=document.getElementById('qm-de')?.value??q.description;
+  q.type=document.getElementById('qm-t')?.value??q.type;
+  const secEl=document.getElementById('qm-sec');
+  q.sectionId=secEl?secEl.value||null:q.sectionId;
+  const re=document.getElementById('qm-rq');if(re)q.required=re.checked;
+  // Collect positionWeights from DOM for ranking
+  if(q.type==='ranking'){
+    const pws=[];document.querySelectorAll('.pw-item input').forEach(el=>pws.push(Number(el.value)||0));
+    if(pws.length)q.positionWeights=pws;
+  }
+  delete q._new;
+  const qs=db.questions[S.asmId]||[];const i=qs.findIndex(x=>x.id===q.id);
+  if(i>=0)qs[i]=q;else{q.orderIndex=qs.length;qs.push(q);db.questions[S.asmId]=qs;}
+  sv();S.modal=null;render();
+}
+
+function mvQSec(qId,dir,secId){
+  const qs=(db.questions[S.asmId]||[]).filter(q=>(q.sectionId||'')===(secId||'')).sort((a,b)=>(a.orderIndex||0)-(b.orderIndex||0));
+  const i=qs.findIndex(q=>q.id===qId);const j=i+dir;
+  if(j<0||j>=qs.length)return;
+  [qs[i].orderIndex,qs[j].orderIndex]=[qs[j].orderIndex,qs[i].orderIndex];
+  sv();render();
+}
+function dlQ(id){if(!confirm('Delete this question?'))return;db.questions[S.asmId]=(db.questions[S.asmId]||[]).filter(q=>q.id!==id);sv();render();}
+
+/* Dimensions */
+function opDimMod(dId){if(dId){const d=gDs().find(d=>d.id===dId);S.modal={type:'dim',data:JSON.parse(JSON.stringify(d))};}else{S.modal={type:'dim',data:{_new:true,id:uid(),aId:S.asmId,name:'',description:'',color:'#3b82f6',orderIndex:gDs().length,ranges:[]}};}render();}
+function addRng(){const rs=S.modal.data.ranges||[];const mx=rs.length?Math.max(...rs.map(r=>r.max))+1:0;S.modal.data.ranges=[...rs,{id:uid(),min:mx,max:mx+50,label:'',description:'',recommendation:''}];render();}
+function updR(i,k,v){if(S.modal.data.ranges[i])S.modal.data.ranges[i][k]=(k==='min'||k==='max')?Number(v):v;}
+function rmR(i){S.modal.data.ranges.splice(i,1);render();}
+function svDim(){const d={...S.modal.data};d.name=document.getElementById('dm-n')?.value??d.name;d.description=document.getElementById('dm-d')?.value??d.description;d.color=document.getElementById('dm-c')?.value??d.color;delete d._new;if(!db.dimensions[S.asmId])db.dimensions[S.asmId]=[];const dims=db.dimensions[S.asmId];const i=dims.findIndex(x=>x.id===d.id);if(i>=0)dims[i]=d;else{d.orderIndex=dims.length;dims.push(d);}sv();S.modal=null;render();}
+function dlDim(id){if(!confirm('Delete dimension?'))return;db.dimensions[S.asmId]=(db.dimensions[S.asmId]||[]).filter(d=>d.id!==id);sv();render();}
+
+/* Brand */
+function gBV(){return{primaryColor:document.getElementById('bc-p')?.value||DB0.primaryColor,bgColor:document.getElementById('bc-bg')?.value||DB0.bgColor,textColor:document.getElementById('bc-t')?.value||DB0.textColor,surfaceColor:document.getElementById('bc-s')?.value||DB0.surfaceColor,borderColor:document.getElementById('bc-b')?.value||DB0.borderColor,logoUrl:document.getElementById('bc-logo')?.value||'',fontFamily:document.getElementById('bc-f')?.value||DB0.fontFamily,btnRadius:String(document.getElementById('bc-br')?.value||8),cardRadius:String(document.getElementById('bc-cr')?.value||12)};}
+function upPv(){const b=gBV();const p=document.getElementById('bp');if(p)p.innerHTML=mkPv(b);const lp=document.getElementById('lp');if(lp){if(b.logoUrl){lp.style.display='';lp.innerHTML=`<img src="${esc(b.logoUrl)}" style="height:30px;object-fit:contain;border:1px solid var(--border);border-radius:6px;padding:5px;background:#f8fafc" onerror="this.style.display='none'" alt="Logo">`;}else lp.style.display='none';}}
+function apSw(id,c){const e=document.getElementById(id);const h=document.getElementById(id+'-hex');if(e)e.value=c;if(h)h.value=c;upPv();}
+function bindCP(){['bc-p','bc-bg','bc-t','bc-s','bc-b'].forEach(id=>{const p=document.getElementById(id);const h=document.getElementById(id+'-hex');if(p&&h){p.addEventListener('input',()=>{h.value=p.value;upPv();});h.addEventListener('input',()=>{if(/^#[0-9a-fA-F]{6}$/.test(h.value)){p.value=h.value;upPv();}});}});}
+function svBr(asmId){const a=db.assessments.find(a=>a.id===asmId);if(a){a.brand=gBV();sv();toast('Brand saved \u2713');}}
+function rstBr(asmId){if(!confirm('Reset brand to defaults?'))return;const a=db.assessments.find(a=>a.id===asmId);if(a){a.brand={...DB0};sv();render();}}
+
+/* Webhook */
+function svWH(){const a=db.assessments.find(a=>a.id===S.asmId);if(!a)return;a.webhookUrl=document.getElementById('wh-u')?.value||'';a.webhookHeaders=document.getElementById('wh-h')?.value||'{}';sv();toast('Webhook saved!');render();}
+async function tstWH(){const url=document.getElementById('wh-u')?.value;if(!url){toast('Enter a webhook URL first','err');return;}const r=await fireWH({...gAsm(),webhookUrl:url,webhookHeaders:document.getElementById('wh-h')?.value},{id:'test-'+uid(),contact:{},scores:{},ranks:{},tiedTop:[],createdAt:now()},gDs());toast(r.status==='success'?'Test sent \u2713':`Error: ${r.message||'HTTP '+r.code}`,r.status==='success'?'ok':'err');}
+async function rfOne(respId){const resp=(db.responses[S.asmId]||[]).find(r=>r.id===respId);const asm=gAsm();if(!resp||!asm)return;const btn=document.getElementById('rfb-'+respId);if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-refresh sp"></i>';}const result=await fireWH(asm,resp,gDs());resp.webhookStatus=result.status;resp.webhookFiredAt=now();sv();toast(result.status==='success'?'Webhook fired!':'Error','ok');render();}
+async function rfFromM(respId){await rfOne(respId);const resp=(db.responses[S.asmId]||[]).find(r=>r.id===respId);if(resp){S.modal={type:'r',data:resp};render();}}
+async function rfAll(){const rs=gRs();const asm=gAsm();if(!asm?.webhookUrl){toast('No webhook URL','err');return;}for(const r of rs){const res=await fireWH(asm,r,gDs());r.webhookStatus=res.status;r.webhookFiredAt=now();}sv();toast('All refired!');render();}
+function opRM(id){const r=(db.responses[S.asmId]||[]).find(r=>r.id===id);if(r){S.modal={type:'r',data:r};render();}}
+
+/* Modal */
+function clM(){S.modal=null;render();}
+function bgC(e){if(e.target===e.currentTarget)clM();}
+
+/* Take */
+function slOp(qId,optId){S.answers[qId]=optId;render();}
+function tgMs(qId,optId){const cur=Array.isArray(S.answers[qId])?[...S.answers[qId]]:[];const i=cur.indexOf(optId);if(i>=0)cur.splice(i,1);else cur.push(optId);S.answers[qId]=cur;render();}
+function pvSt(){if(S.step>0){S.step--;render();window.scrollTo(0,0);}}
+function nxSt(){
+  const qs=orderedQs();const q=qs[S.step];
+  if(q.required){
+    if(q.type==='multiple_choice'&&!S.answers[q.id]){toast('Please select an answer','err');return;}
+    if(q.type==='multi_select'&&(!S.answers[q.id]||!S.answers[q.id].length)){toast('Please select at least one option','err');return;}
+    if(q.type==='contact_form'){(q.contactFields||[]).forEach(f=>{const el=document.getElementById('cf-'+f.id);if(el)S.contact[f.label]=el.value;});for(const f of(q.contactFields||[])){if(f.required&&!S.contact[f.label]){toast(`Please fill in "${f.label}"`,'err');return;}}}
+  }else if(q.type==='contact_form')(q.contactFields||[]).forEach(f=>{const el=document.getElementById('cf-'+f.id);if(el)S.contact[f.label]=el.value;});
+  if(S.step<qs.length-1){S.step++;render();window.scrollTo(0,0);}else sbmA();
+}
+function sbmA(){
+  const qs=orderedQs();const dims=gDs();const scores=calcScores(qs,dims,S.answers);const ranks=getRanks(dims,scores);const tiedTop=getTied(scores);
+  const resp={id:uid(),assessmentId:S.asmId,contact:{...S.contact},answers:{...S.answers},scores,ranks,tiedTop,webhookStatus:'pending',webhookFiredAt:null,createdAt:now()};
+  if(!S.preview){(db.responses[S.asmId]=db.responses[S.asmId]||[]).push(resp);sv();}
+  S.doneResp=resp;S.view='complete';render();window.scrollTo(0,0);
+  if(!S.preview){const asm=gAsm();if(asm?.webhookUrl){fireWH(asm,resp,gDs()).then(r=>{const rr=(db.responses[S.asmId]||[]).find(x=>x.id===resp.id);if(rr){rr.webhookStatus=r.status;rr.webhookFiredAt=now();sv();}});}}
+}
+function rstA(){S.step=0;S.answers={};S.contact={};S.doneResp=null;S.view='take';render();}
+function toast(msg,type='ok'){const r=document.getElementById('tr');if(!r)return;const ic={ok:'ti-circle-check',err:'ti-alert-circle',inf:'ti-info-circle'};const cl={ok:'tok',err:'terr',inf:'tinf'};r.innerHTML=`<div class="toast ${cl[type]||'tok'}"><i class="ti ${ic[type]||ic.ok}"></i> ${esc(msg)}</div>`;setTimeout(()=>{r.innerHTML='';},3800);}
+
+
+/* ══════════════════════════════════════════
+   SCHEMA SPEC (AI-ready system prompt)
+══════════════════════════════════════════ */
+const SCHEMA_SPEC = `ASSESSMENT BUILDER — JSON SCHEMA SPECIFICATION
+=============================================
+Use this spec to generate valid assessment JSON for import.
+All dimension/section references use NAMES (strings), not internal IDs.
+
+ROOT OBJECT
+-----------
+{
+  "assessment": { title, description, status, showResults },
+  "dimensions": Dimension[],
+  "sections": Section[],
+  "questions": Question[],
+  "webhookUrl": string (optional),
+  "webhookHeaders": string (optional — JSON-stringified headers object)
+}
+
+DIMENSION
+---------
+{
+  "name": string,           // Required. Used as key in all option scores.
+  "description": string,    // What this dimension measures.
+  "color": string,          // Hex color e.g. "#3b82f6"
+  "ranges": [
+    {
+      "min": number,        // Inclusive lower bound
+      "max": number,        // Inclusive upper bound
+      "label": string,      // e.g. "Emerging" | "Developing" | "Advanced"
+      "description": string,
+      "recommendation": string
+    }
+  ]
+}
+RANGE NOTE: Ranking questions multiply scores by position weights.
+  Example: weight [10,6,3,1], top option score 8 → contributes 80 pts.
+  Set range max values to accommodate the maximum weighted total across
+  all questions. A safe ceiling = max_option_score × max_weight × num_ranking_questions.
+
+SECTION
+-------
+{
+  "title": string,              // Required. Referenced by questions.
+  "description": string,
+  "orderIndex": number,         // 0-based display order
+  "activeDimensions": string[]  // Dimension names scoped to this section.
+                                // Empty [] = all dimensions shown.
+}
+
+QUESTION
+--------
+{
+  "section": string | null,     // Section title. null = ungrouped.
+  "type": string,               // See QUESTION TYPES below.
+  "title": string,              // Required.
+  "description": string,
+  "required": boolean,
+  "orderIndex": number,
+
+  // RANKING only:
+  "positionWeights": number[],  // One weight per option. Index 0 = Rank #1.
+                                // Must match options array length.
+                                // Example: [10, 6, 3, 1]
+
+  // CONTACT_FORM only:
+  "contactFields": [
+    { "label": string, "type": "text|email|tel|number", "required": boolean }
+  ],
+
+  // MULTIPLE_CHOICE, MULTI_SELECT, RANKING:
+  "options": [
+    {
+      "text": string,
+      "scores": { "DimensionName": number }  // use exact dimension names
+    }
+  ]
+}
+
+QUESTION TYPES
+--------------
+  instruction      Display-only text block. No scoring.
+  contact_form     Collects respondent info. Uses contactFields.
+  multiple_choice  Select one. Selected option scores added to totals.
+  multi_select     Select many. All selected option scores summed.
+  ranking          Drag to order. score × positionWeight[rank] summed.
+  text             Open text. No scoring.
+
+SCORING FORMULAS
+----------------
+  multiple_choice: answer.scores[dim]
+  multi_select:    sum(selected[].scores[dim])
+  ranking:         sum(options[order[i]].scores[dim] × positionWeights[i])
+
+COMPLETE EXAMPLE
+----------------
+{
+  "assessment": {
+    "title": "Leadership Readiness Check",
+    "description": "A 5-minute assessment across 3 leadership dimensions.",
+    "status": "draft",
+    "showResults": true
+  },
+  "dimensions": [
+    {
+      "name": "Strategic Thinking",
+      "description": "Vision and long-term planning",
+      "color": "#8b5cf6",
+      "ranges": [
+        {"min":0,"max":60,"label":"Emerging","description":"Early stage","recommendation":"Work with a coach on 3-year visioning."},
+        {"min":61,"max":130,"label":"Developing","description":"Growing capability","recommendation":"Build a strategic planning rhythm."},
+        {"min":131,"max":300,"label":"Advanced","description":"Clear strength","recommendation":"Teach others and expand influence."}
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "title": "Core Priorities",
+      "description": "",
+      "orderIndex": 0,
+      "activeDimensions": ["Strategic Thinking"]
+    }
+  ],
+  "questions": [
+    {
+      "section": "Core Priorities",
+      "type": "instruction",
+      "title": "Welcome",
+      "description": "This 3-question assessment reveals your leadership profile.",
+      "required": false
+    },
+    {
+      "section": "Core Priorities",
+      "type": "contact_form",
+      "title": "Your Information",
+      "required": true,
+      "contactFields": [
+        {"label":"Full Name","type":"text","required":true},
+        {"label":"Email Address","type":"email","required":true}
+      ]
+    },
+    {
+      "section": "Core Priorities",
+      "type": "ranking",
+      "title": "Rank these leadership priorities:",
+      "required": true,
+      "positionWeights": [10, 6, 3, 1],
+      "options": [
+        {"text":"Setting long-term vision","scores":{"Strategic Thinking":9}},
+        {"text":"Building team culture","scores":{"Strategic Thinking":6}},
+        {"text":"Managing daily operations","scores":{"Strategic Thinking":3}},
+        {"text":"Handling urgent issues","scores":{"Strategic Thinking":1}}
+      ]
+    }
+  ]
+}`;
+
+/* ══ IMPORT / EXPORT TAB ══ */
+function rIO(asm){
+  return `<div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+
+      <!-- JSON COLUMN -->
+      <div>
+        <div class="card mb3">
+          <div class="ctit"><i class="ti ti-code"></i> JSON Export</div>
+          <p class="tm tsm mb3">Exports the full assessment schema using dimension and section <strong>names</strong> — not internal IDs — so it's portable and AI-readable.</p>
+          <div class="fx g2">
+            <button class="btn bp" onclick="doExportJSON('${asm.id}')"><i class="ti ti-download"></i> Download JSON</button>
+            <button class="btn bs" onclick="doCopyJSON('${asm.id}')"><i class="ti ti-copy"></i> Copy to Clipboard</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="ctit"><i class="ti ti-upload"></i> JSON Import</div>
+          <p class="tm tsm mb3">Paste JSON below or upload a file to create a new assessment. Works with AI-generated output using the schema on the right.</p>
+          <div class="fg">
+            <label>Paste JSON here</label>
+            <textarea id="json-paste" rows="9" style="font-family:monospace;font-size:11.5px;line-height:1.5" placeholder='{"assessment":{"title":"..."},"dimensions":[...],"sections":[...],"questions":[]}'></textarea>
+          </div>
+          <div class="fx g2 ic mt2" style="flex-wrap:wrap">
+            <button class="btn bp" onclick="doImportJSON()"><i class="ti ti-plus"></i> Import as New Assessment</button>
+            <span class="tm tsm">— or —</span>
+            <label class="btn bs" style="cursor:pointer"><i class="ti ti-file-upload"></i> Upload .json<input type="file" accept=".json,application/json" style="display:none" onchange="handleJSONFile(this)"></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- CSV COLUMN -->
+      <div>
+        <div class="card mb3">
+          <div class="ctit"><i class="ti ti-table-export"></i> CSV Export</div>
+          <p class="tm tsm mb3">Download as spreadsheets you can open in Excel or Google Sheets, edit, and re-import. Great for migrating from PointerPro or other tools.</p>
+          <div class="fx g2" style="flex-wrap:wrap">
+            <button class="btn bs" onclick="doExportDimsCSV('${asm.id}')"><i class="ti ti-download"></i> Dimensions CSV</button>
+            <button class="btn bs" onclick="doExportQsCSV('${asm.id}')"><i class="ti ti-download"></i> Questions CSV</button>
+          </div>
+          <p class="tm tsm mt3">CSV format uses column headers matching your dimension names — so you can map directly to your existing scoring sheets.</p>
+        </div>
+
+        <div class="card">
+          <div class="ctit"><i class="ti ti-table-import"></i> CSV Import</div>
+          <p class="tm tsm mb3">Import adds to the current assessment without overwriting existing data. Run Dimensions first, then Questions.</p>
+
+          <div style="border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:10px">
+            <div class="fgl mb1">1. Dimensions CSV</div>
+            <p class="tm tsm mb2">Columns: <code style="font-size:11px;background:var(--bg);padding:1px 5px;border-radius:4px">name, description, color, range_min, range_max, range_label, range_description, range_recommendation</code><br>One row per range (repeat name/color for each range of a dimension).</p>
+            <label class="btn bs bsm" style="cursor:pointer"><i class="ti ti-upload"></i> Upload Dimensions CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleDimsCSVFile(this,'${asm.id}')"></label>
+          </div>
+
+          <div style="border:1px solid var(--border);border-radius:9px;padding:12px 14px">
+            <div class="fgl mb1">2. Questions CSV</div>
+            <p class="tm tsm mb2">Columns: <code style="font-size:11px;background:var(--bg);padding:1px 5px;border-radius:4px">section, type, title, description, required, position_weights, option_text, [DimName1], [DimName2]...</code><br>One row per option. Repeat section/title/type for each option row of the same question. <code style="font-size:11px;background:var(--bg);padding:1px 5px;border-radius:4px">position_weights</code> uses pipe-separated values: <code style="font-size:11px">10|6|3|1</code></p>
+            <label class="btn bs bsm" style="cursor:pointer"><i class="ti ti-upload"></i> Upload Questions CSV<input type="file" accept=".csv,text/csv" style="display:none" onchange="handleQsCSVFile(this,'${asm.id}')"></label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCHEMA REFERENCE -->
+    <div class="card">
+      <div class="ctit"><i class="ti ti-robot"></i> AI / API Schema Reference</div>
+      <p class="tm tsm mb3">Copy this into a Claude or GPT system prompt, or pass it to your n8n AI agent. The AI will generate valid JSON you can paste directly into the import field above — or POST to n8n to import programmatically.</p>
+      <div class="fx g2 mb3" style="flex-wrap:wrap">
+        <button class="btn bp" onclick="doCopySchema()"><i class="ti ti-copy"></i> Copy Full Schema Spec</button>
+        <button class="btn bs" onclick="doDownloadSchema()"><i class="ti ti-download"></i> Download Schema .txt</button>
+        <button class="btn bs" onclick="doDownloadExample('${asm.id}')"><i class="ti ti-download"></i> Download Live Example JSON</button>
+      </div>
+      <pre style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:11.5px;overflow:auto;max-height:420px;line-height:1.65;color:var(--text);white-space:pre-wrap">${esc(SCHEMA_SPEC)}</pre>
+    </div>
+  </div>`;
+}
+
+/* ══ CSV PARSER ══ */
+function parseCSV(text){
+  const lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').trim().split('\n');
+  if(!lines.length)return[];
+  const headers=parseCSVRow(lines[0]);
+  return lines.slice(1).filter(l=>l.trim()).map(line=>{
+    const vals=parseCSVRow(line);
+    return Object.fromEntries(headers.map((h,i)=>[h.trim(),(vals[i]||'').trim()]));
+  });
+}
+function parseCSVRow(line){
+  const result=[];let cur='';let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}
+    else if(ch===','&&!inQ){result.push(cur);cur='';}
+    else cur+=ch;
+  }
+  result.push(cur);return result;
+}
+function csvQ(v){
+  const s=String(v??'');
+  return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:s;
+}
+function dlFile(content,filename,mime='text/plain'){
+  const blob=new Blob([content],{type:mime});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=filename;a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ══ JSON EXPORT ══ */
+function buildExportJSON(asmId){
+  const asm=db.assessments.find(a=>a.id===asmId);if(!asm)return null;
+  const dims=(db.dimensions[asmId]||[]).sort((a,b)=>a.orderIndex-b.orderIndex);
+  const secs=((db.sections||{})[asmId]||[]).sort((a,b)=>a.orderIndex-b.orderIndex);
+  const allQs=db.questions[asmId]||[];
+  const dimIdToName=Object.fromEntries(dims.map(d=>[d.id,d.name]));
+  const secIdToTitle=Object.fromEntries(secs.map(s=>[s.id,s.title]));
+  const secOrder=Object.fromEntries(secs.map((s,i)=>[s.id,i]));
+  const sortedQs=[...allQs].sort((a,b)=>{
+    const si=(a.sectionId!=null?secOrder[a.sectionId]:9999)??9999;
+    const sj=(b.sectionId!=null?secOrder[b.sectionId]:9999)??9999;
+    if(si!==sj)return si-sj;
+    return(a.orderIndex||0)-(b.orderIndex||0);
+  });
+  return{
+    assessment:{title:asm.title,description:asm.description,status:asm.status,showResults:asm.showResults},
+    dimensions:dims.map(d=>({name:d.name,description:d.description,color:d.color,ranges:(d.ranges||[]).sort((a,b)=>a.min-b.min).map(r=>({min:r.min,max:r.max,label:r.label,description:r.description,recommendation:r.recommendation}))})),
+    sections:secs.map(s=>({title:s.title,description:s.description,orderIndex:s.orderIndex,activeDimensions:(s.activeDimIds||[]).map(id=>dimIdToName[id]||id)})),
+    questions:sortedQs.map(q=>({
+      section:q.sectionId?secIdToTitle[q.sectionId]||null:null,
+      type:q.type,title:q.title,description:q.description,required:q.required,orderIndex:q.orderIndex,
+      ...(q.type==='ranking'?{positionWeights:q.positionWeights||[]}:{}),
+      ...(q.contactFields?.length?{contactFields:q.contactFields}:{}),
+      ...((q.options||[]).length?{options:(q.options||[]).map(o=>({text:o.text,scores:Object.fromEntries(Object.entries(o.scores||{}).map(([k,v])=>[dimIdToName[k]||k,v]))}))}:{}),
+    })),
+    webhookUrl:asm.webhookUrl,
+    webhookHeaders:asm.webhookHeaders,
+  };
+}
+function doExportJSON(asmId){
+  const j=buildExportJSON(asmId);if(!j)return;
+  const asm=db.assessments.find(a=>a.id===asmId);
+  const fn=(asm?.title||'assessment').replace(/[^a-z0-9]/gi,'-').toLowerCase()+'.json';
+  dlFile(JSON.stringify(j,null,2),fn,'application/json');
+}
+function doCopyJSON(asmId){
+  const j=buildExportJSON(asmId);if(!j)return;
+  navigator.clipboard.writeText(JSON.stringify(j,null,2)).then(()=>toast('JSON copied to clipboard \u2713')).catch(()=>toast('Copy failed — try Download instead','err'));
+}
+
+/* ══ JSON IMPORT ══ */
+function importJSONObj(obj){
+  const id=uid();
+  const a=obj.assessment||{};
+  const dimNameToId={};
+  const dims=(obj.dimensions||[]).map((d,i)=>{
+    const newId=uid();dimNameToId[d.name]=newId;
+    return{id:newId,aId:id,name:d.name,description:d.description||'',color:d.color||'#3b82f6',orderIndex:i,ranges:(d.ranges||[]).map(r=>({id:uid(),...r}))};
+  });
+  const secNameToId={};
+  const secs=(obj.sections||[]).map((s,i)=>{
+    const newId=uid();secNameToId[s.title]=newId;
+    return{id:newId,aId:id,title:s.title,description:s.description||'',orderIndex:s.orderIndex??i,activeDimIds:(s.activeDimensions||[]).map(n=>dimNameToId[n]).filter(Boolean)};
+  });
+  const qs=(obj.questions||[]).map((q,i)=>({
+    id:uid(),aId:id,sectionId:q.section?secNameToId[q.section]||null:null,
+    type:q.type||'multiple_choice',title:q.title||'',description:q.description||'',
+    required:q.required!==false,orderIndex:q.orderIndex??i,
+    positionWeights:q.positionWeights||[],
+    contactFields:(q.contactFields||[]).map(f=>({id:uid(),...f})),
+    options:(q.options||[]).map(o=>({id:uid(),text:o.text||'',scores:Object.fromEntries(Object.entries(o.scores||{}).map(([n,v])=>[dimNameToId[n]||n,v]))})),
+  }));
+  db.assessments.push({id,title:a.title||'Imported Assessment',description:a.description||'',status:a.status||'draft',showResults:a.showResults!==false,brand:{...DB0},webhookUrl:obj.webhookUrl||'',webhookHeaders:obj.webhookHeaders||'{"Content-Type":"application/json"}',createdAt:now()});
+  db.questions[id]=qs;db.dimensions[id]=dims;
+  if(!db.sections)db.sections={};db.sections[id]=secs;db.responses[id]=[];
+  sv();return id;
+}
+function doImportJSON(){
+  const txt=document.getElementById('json-paste')?.value?.trim();
+  if(!txt){toast('Paste JSON first','err');return;}
+  try{
+    const obj=JSON.parse(txt);
+    const newId=importJSONObj(obj);
+    S.asmId=newId;S.tab='gen';S.view='ed';
+    toast('Assessment imported successfully \u2713');render();
+  }catch(e){toast('Invalid JSON: '+e.message,'err');}
+}
+function handleJSONFile(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const obj=JSON.parse(e.target.result);
+      const newId=importJSONObj(obj);
+      S.asmId=newId;S.tab='gen';S.view='ed';
+      toast('Imported from file \u2713');render();
+    }catch(err){toast('Could not parse file: '+err.message,'err');}
+  };
+  reader.readAsText(file);
+}
+
+/* ══ CSV EXPORT ══ */
+function doExportDimsCSV(asmId){
+  const dims=(db.dimensions[asmId]||[]).sort((a,b)=>a.orderIndex-b.orderIndex);
+  if(!dims.length){toast('No dimensions to export','err');return;}
+  const rows=[['name','description','color','range_min','range_max','range_label','range_description','range_recommendation']];
+  dims.forEach(d=>{
+    const ranges=(d.ranges||[]).sort((a,b)=>a.min-b.min);
+    if(!ranges.length)rows.push([d.name,d.description||'',d.color||'','','','','','']);
+    else ranges.forEach(r=>rows.push([d.name,d.description||'',d.color||'',r.min,r.max,r.label,r.description||'',r.recommendation||'']));
+  });
+  const asm=db.assessments.find(a=>a.id===asmId);
+  const fn=(asm?.title||'assessment').replace(/[^a-z0-9]/gi,'-').toLowerCase()+'-dimensions.csv';
+  dlFile(rows.map(r=>r.map(csvQ).join(',')).join('\n'),fn,'text/csv');
+}
+function doExportQsCSV(asmId){
+  const dims=(db.dimensions[asmId]||[]).sort((a,b)=>a.orderIndex-b.orderIndex);
+  const secs=((db.sections||{})[asmId]||[]).sort((a,b)=>a.orderIndex-b.orderIndex);
+  const secOrder=Object.fromEntries(secs.map((s,i)=>[s.id,i]));
+  const secIdToTitle=Object.fromEntries(secs.map(s=>[s.id,s.title]));
+  const dimIdToName=Object.fromEntries(dims.map(d=>[d.id,d.name]));
+  const sortedQs=[...(db.questions[asmId]||[])].sort((a,b)=>{
+    const si=(a.sectionId!=null?secOrder[a.sectionId]:9999)??9999;
+    const sj=(b.sectionId!=null?secOrder[b.sectionId]:9999)??9999;
+    if(si!==sj)return si-sj;
+    return(a.orderIndex||0)-(b.orderIndex||0);
+  });
+  if(!sortedQs.length){toast('No questions to export','err');return;}
+  const dimNames=dims.map(d=>d.name);
+  const headers=['section','type','title','description','required','position_weights','option_text',...dimNames];
+  const rows=[headers];
+  sortedQs.forEach(q=>{
+    const sec=q.sectionId?secIdToTitle[q.sectionId]||'':'';
+    const pw=q.positionWeights?.length?q.positionWeights.join('|'):'';
+    if(!q.options||!q.options.length){
+      rows.push([sec,q.type,q.title,q.description||'',q.required?'true':'false',pw,'',...dimNames.map(()=>'')]);
+    }else{
+      q.options.forEach(opt=>{
+        const scores=dims.map(d=>String(opt.scores?.[d.id]??''));
+        rows.push([sec,q.type,q.title,q.description||'',q.required?'true':'false',pw,opt.text,...scores]);
+      });
+    }
+  });
+  const asm=db.assessments.find(a=>a.id===asmId);
+  const fn=(asm?.title||'assessment').replace(/[^a-z0-9]/gi,'-').toLowerCase()+'-questions.csv';
+  dlFile(rows.map(r=>r.map(csvQ).join(',')).join('\n'),fn,'text/csv');
+}
+
+/* ══ CSV IMPORT ══ */
+function handleDimsCSVFile(input,asmId){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>importDimsCSV(e.target.result,asmId);
+  reader.readAsText(file);
+}
+function importDimsCSV(text,asmId){
+  const rows=parseCSV(text);if(!rows.length){toast('No data in CSV','err');return;}
+  if(!db.dimensions[asmId])db.dimensions[asmId]=[];
+  const existing=db.dimensions[asmId];
+  const existingNames=new Set(existing.map(d=>d.name.toLowerCase()));
+  const groups={};const order=[];
+  rows.forEach(row=>{
+    const name=(row.name||row.Name||'').trim();if(!name)return;
+    const key=name.toLowerCase();
+    if(!groups[key]){groups[key]={name,description:row.description||'',color:row.color||'#3b82f6',ranges:[]};order.push(key);}
+    const mn=Number(row.range_min);const mx=Number(row.range_max);
+    if(!isNaN(mn)&&!isNaN(mx)&&row.range_label){
+      groups[key].ranges.push({id:uid(),min:mn,max:mx,label:row.range_label||'',description:row.range_description||'',recommendation:row.range_recommendation||''});
+    }
+  });
+  let added=0,updated=0;
+  order.forEach(key=>{
+    const g=groups[key];const g_name_lower=g.name.toLowerCase();
+    const ex=existing.find(d=>d.name.toLowerCase()===g_name_lower);
+    if(ex){
+      // Merge ranges
+      g.ranges.forEach(r=>{if(!ex.ranges.find(er=>er.label===r.label))ex.ranges.push(r);});
+      updated++;
+    }else{
+      existing.push({id:uid(),aId:asmId,name:g.name,description:g.description,color:g.color,orderIndex:existing.length,ranges:g.ranges});
+      added++;
+    }
+  });
+  sv();toast(`Dimensions: ${added} added, ${updated} updated`);render();
+}
+function handleQsCSVFile(input,asmId){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>importQsCSV(e.target.result,asmId);
+  reader.readAsText(file);
+}
+function importQsCSV(text,asmId){
+  const rows=parseCSV(text);if(!rows.length){toast('No data in CSV','err');return;}
+  const fixed=['section','type','title','description','required','position_weights','option_text'];
+  const allKeys=Object.keys(rows[0]);
+  const dimCols=allKeys.filter(h=>!fixed.includes(h.toLowerCase().trim()));
+  const dims=db.dimensions[asmId]||[];
+  const secs=((db.sections||{})[asmId]||[]);
+  const dimColToId={};
+  dimCols.forEach(col=>{const m=dims.find(d=>d.name.toLowerCase()===col.toLowerCase().trim());if(m)dimColToId[col]=m.id;});
+  const secTitleToId=Object.fromEntries(secs.map(s=>[s.title.toLowerCase(),s.id]));
+  const groups={};const groupOrder=[];
+  // Track last known question context for continuation rows
+  let lastKey='';
+  rows.forEach(row=>{
+    const rawTitle=(row.title||'').trim();
+    const rawType=(row.type||'').trim();
+    const rawSec=(row.section||'').trim();
+    // If title+type are blank, it's a continuation of the last question
+    const key=rawTitle&&rawType?`${rawSec}|||${rawTitle}|||${rawType}`:lastKey;
+    if(!key)return;
+    if(!groups[key]){
+      groups[key]={section:rawSec||groups[lastKey]?.section||'',type:rawType||'multiple_choice',title:rawTitle,description:row.description||'',required:(row.required||'true').toLowerCase()!=='false',positionWeights:row.position_weights||'',options:[]};
+      groupOrder.push(key);
+    }
+    lastKey=key;
+    const optText=(row.option_text||'').trim();
+    if(optText){
+      const scores={};
+      dimCols.forEach(col=>{if(dimColToId[col]&&row[col]!=='')scores[dimColToId[col]]=Number(row[col])||0;});
+      groups[key].options.push({id:uid(),text:optText,scores});
+    }
+  });
+  if(!db.questions[asmId])db.questions[asmId]=[];
+  const existing=db.questions[asmId];
+  let added=0;
+  groupOrder.forEach((key,i)=>{
+    const g=groups[key];
+    const secId=g.section?secTitleToId[g.section.toLowerCase()]||null:null;
+    const weights=g.positionWeights?g.positionWeights.split('|').map(Number).filter(n=>!isNaN(n)):[];
+    existing.push({id:uid(),aId:asmId,sectionId:secId,type:g.type,title:g.title,description:g.description,required:g.required,orderIndex:existing.length,positionWeights:weights,contactFields:[],options:g.options});
+    added++;
+  });
+  sv();toast(`Imported ${added} question${added!==1?'s':''} \u2713`);render();
+}
+
+/* ══ SCHEMA / EXAMPLE DOWNLOADS ══ */
+function doCopySchema(){navigator.clipboard.writeText(SCHEMA_SPEC).then(()=>toast('Schema spec copied \u2713')).catch(()=>toast('Copy failed','err'));}
+function doDownloadSchema(){dlFile(SCHEMA_SPEC,'assessment-builder-schema.txt');}
+function doDownloadExample(asmId){
+  const j=buildExportJSON(asmId);if(!j){toast('Nothing to export','err');return;}
+  dlFile(JSON.stringify(j,null,2),'example-assessment.json','application/json');
+}
+
+
+
+/* ══ SHARE & EMBED TAB ══════════════════════════════════════════════ */
+function rEmbed(asm){
+  const playerUrl=`${APP_URL}/a/${asm.id}`;
+  const embedSnippet=`<div data-vs-assessment="${asm.id}"\n     data-vs-redirect="https://yoursite.com/thank-you">\n</div>\n<script src="${APP_URL}/embed.js" async><\/script>`;
+  const iframeSnippet=`<iframe\n  src="${playerUrl}"\n  width="100%"\n  height="700"\n  style="border:none;display:block"\n  allow="clipboard-write">\n</iframe>`;
+  return `<div>
+    <div class="card mb3">
+      <div class="ctit"><i class="ti ti-link"></i> Direct Link</div>
+      <p class="tm tsm mb3">Share this URL directly — respondents take the assessment standalone, full-page.</p>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" value="${esc(playerUrl)}" readonly style="flex:1;font-family:monospace;font-size:13px;background:var(--bg)">
+        <button class="btn bp" onclick="navigator.clipboard.writeText('${esc(playerUrl)}').then(()=>toast('Link copied ✓'))"><i class="ti ti-copy"></i> Copy</button>
+        <a href="${esc(playerUrl)}" target="_blank" class="btn bs"><i class="ti ti-external-link"></i> Open</a>
+      </div>
+      ${asm.status!=='published'?`<div class="ib mt3"><i class="ti ti-info-circle"></i> <strong>Assessment is not published.</strong> Publish it first so the player can load it.</div>`:''}
+    </div>
+    <div class="card mb3">
+      <div class="ctit"><i class="ti ti-code"></i> Smart Embed — WordPress, Webflow, any HTML</div>
+      <p class="tm tsm mb3">Paste this into any HTML block. Auto-resizes, fires redirect on completion. No plugin needed.</p>
+      <pre style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;overflow:auto;line-height:1.65;white-space:pre-wrap">${esc(embedSnippet)}</pre>
+      <button class="btn bp mt3" onclick="navigator.clipboard.writeText(\`${embedSnippet.replace(/`/g,'\`')}\`).then(()=>toast('Embed code copied ✓'))"><i class="ti ti-copy"></i> Copy Embed Code</button>
+      <p class="tm tsm mt2">Change <code style="background:var(--bg);padding:1px 5px;border-radius:3px">data-vs-redirect</code> to your thank-you page URL, or remove it to stay on the results page.</p>
+    </div>
+    <div class="card mb3">
+      <div class="ctit"><i class="ti ti-layout-sidebar"></i> Plain iFrame — simpler, fixed height</div>
+      <p class="tm tsm mb3">Use this if the smart embed doesn't work in your platform. Set height to fit your content.</p>
+      <pre style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;overflow:auto;line-height:1.65;white-space:pre-wrap">${esc(iframeSnippet)}</pre>
+      <button class="btn bs mt3" onclick="navigator.clipboard.writeText(\`${iframeSnippet.replace(/`/g,'\`')}\`).then(()=>toast('iFrame code copied ✓'))"><i class="ti ti-copy"></i> Copy iFrame Code</button>
+    </div>
+    <div class="card">
+      <div class="ctit"><i class="ti ti-robot"></i> JavaScript API</div>
+      <p class="tm tsm mb2">For advanced use — programmatic embed with callbacks.</p>
+      <pre style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:12px;overflow:auto;line-height:1.65;white-space:pre-wrap">${esc(`VitalSpark.embed({
+  container:    '#my-div',
+  assessmentId: '${asm.id}',
+  redirect:     'https://yoursite.com/thank-you',
+  height:       'auto',
+  onComplete:   (data) => console.log('done', data),
+});`)}</pre>
+    </div>
+  </div>`;
+}
+
+/* ══ LOGIN SCREEN ════════════════════════════════════════════════════ */
+function rLogin(){
+  return `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8fafc;font-family:system-ui,sans-serif">
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:48px 40px;max-width:400px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.08)">
+      <div style="width:56px;height:56px;background:#eff6ff;border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 20px">
+        <i class="ti ti-chart-bar-popular" style="font-size:28px;color:#2563eb"></i>
+      </div>
+      <h1 style="font-size:22px;font-weight:700;color:#1e293b;margin-bottom:8px">AssessBuilder</h1>
+      <p style="font-size:14px;color:#64748b;margin-bottom:32px;line-height:1.6">Sign in to build, brand, and deploy<br>assessment experiences.</p>
+      <button onclick="signInGoogle()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 20px;background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;font-size:15px;font-weight:500;color:#1e293b;cursor:pointer;font-family:inherit;transition:border-color .15s,box-shadow .15s" onmouseover="this.style.borderColor='#2563eb';this.style.boxShadow='0 0 0 3px rgba(37,99,235,.1)'" onmouseout="this.style.borderColor='#e2e8f0';this.style.boxShadow='none'">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/></svg>
+        Continue with Google
+      </button>
+      <p style="font-size:12px;color:#94a3b8;margin-top:20px">Access is by invite. Contact your administrator<br>if you don't have access.</p>
+    </div>
+  </div>`;
+}
+
+/* ══ AUTH FUNCTIONS ══════════════════════════════════════════════════ */
+function signInGoogle(){
+  if(!_sb){toast('Supabase not initialized','err');return;}
+  _sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:APP_URL+'/auth/callback'}});
+}
+
+async function signOut(){
+  await _sb.auth.signOut();
+  db={assessments:[],questions:{},dimensions:{},sections:{},responses:{}};
+  S.view='home';S.asmId=null;
+  document.getElementById('app').innerHTML=rLogin();
+}
+
+/* ══ INIT ═════════════════════════════════════════════════════════════ */
+async function initAuth(){
+  // Fall back to sample data if Supabase not configured (local dev)
+  if(!SUPABASE_URL||SUPABASE_URL==='${SUPABASE_URL}'){
+    console.warn('Supabase not configured — running in local mode');
+    try{const r=localStorage.getItem(STORE);if(r){db=JSON.parse(r);if(!db.sections)db.sections={};}else{db=mkSample();}}catch{db=mkSample();}
+    render();return;
+  }
+  _sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{flowType:'pkce',detectSessionInUrl:true,autoRefreshToken:true,persistSession:true}});
+  _sb.auth.onAuthStateChange(async(event,session)=>{
+    if(event==='SIGNED_IN'||event==='TOKEN_REFRESHED'){
+      _session=session;
+      _userEmail=session.user.email||'';
+      _userName=session.user.user_metadata?.full_name||session.user.user_metadata?.name||_userEmail;
+      if(window.location.pathname.includes('callback')){window.history.replaceState({},'','/');}
+      try{
+        _tenantId=await ensureTenant();
+        showLoading();
+        await loadAll();
+        render();
+      }catch(e){console.error(e);toast('Failed to load data: '+e.message,'err');}
+    }else if(event==='SIGNED_OUT'){
+      _session=null;_tenantId=null;
+      document.getElementById('app').innerHTML=rLogin();
+    }
+  });
+  const{data:{session}}=await _sb.auth.getSession();
+  if(!session){document.getElementById('app').innerHTML=rLogin();}
+}
+
+function showLoading(){
+  document.getElementById('app').innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#64748b;font-family:system-ui,sans-serif"><div style="width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin .7s linear infinite"></div><div style="font-size:14px">Loading your assessments...</div></div>`;
+}
+
+
+initAuth();
+</script>
+</body>
+</html>
