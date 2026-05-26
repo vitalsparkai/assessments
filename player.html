@@ -222,6 +222,108 @@ function getTied(scores) {
   return Object.entries(scores).filter(([, v]) => v === mx).map(([id]) => id);
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// CLASSIFICATION ENGINE
+// Applies dynamic formulas (PT delta, Relative Max) that can't be
+// expressed as static min/max ranges.
+// Sections set classification_formula: 'pt_delta' | 'relative_max' | 'ranges'
+// ═══════════════════════════════════════════════════════════════════
+const PT_MAX_SCORES = { 'Adventurer': 28 };
+const PT_DEFAULT_MAX = 32;
+
+function classifyAll(rawScores) {
+  const overrides = {};
+  if (!S._hiddenDims) S._hiddenDims = new Set();
+
+  (SECS || []).forEach(sec => {
+    const formula = sec.classification_formula || sec.classificationFormula || 'ranges';
+    if (formula === 'ranges') return; // static ranges handle it, no override needed
+
+    const secDimIds = sec.active_dim_ids || sec.activeDimIds || [];
+    const secDims = DIMS.filter(d => secDimIds.includes(d.id));
+    if (!secDims.length) return;
+
+    // ── PT Delta Formula ───────────────────────────────────────────
+    if (formula === 'pt_delta') {
+      const pcts = {};
+      secDims.forEach(d => {
+        const mx = PT_MAX_SCORES[d.name] || PT_DEFAULT_MAX;
+        pcts[d.id] = ((rawScores[d.id] || 0) / mx) * 100;
+      });
+      const maxPct = Math.max(...Object.values(pcts));
+
+      secDims.forEach(d => {
+        const pct = pcts[d.id];
+        let label = null, desc = '', rec = '';
+        if (pct >= maxPct - 1.5) {
+          label = 'Personality Type';
+          desc  = 'Core expression of who you are';
+          rec   = 'Own this type fully — it is your natural strength and signature.';
+        } else if (pct >= 65) {
+          label = 'Highly Impacting Type';
+          desc  = 'Significantly shapes your behavior and decisions';
+          rec   = 'Lean into this type in contexts where it is an asset.';
+        } else if (pct >= 37) {
+          label = 'Secondary Type';
+          desc  = 'A background influence on how you show up';
+          rec   = 'Notice when this type activates and leverage it intentionally.';
+        }
+        if (label) {
+          overrides[d.id] = { label, description: desc, recommendation: rec };
+        } else {
+          S._hiddenDims.add(d.id); // below threshold — suppress from results
+        }
+      });
+    }
+
+    // ── Relative Max Formula ───────────────────────────────────────
+    else if (formula === 'relative_max') {
+      const rawSec = {};
+      secDims.forEach(d => { rawSec[d.id] = rawScores[d.id] || 0; });
+      const maxRaw = Math.max(...Object.values(rawSec));
+      const THRESHOLD = 4;
+      const SIG_FLOOR = maxRaw * 0.4;
+      const belowMax = Object.values(rawSec).filter(v => v < maxRaw && v > SIG_FLOOR);
+      const secondMax = belowMax.length ? Math.max(...belowMax) : -1;
+
+      secDims.forEach(d => {
+        const s = rawSec[d.id];
+        let label = null;
+        if (s >= maxRaw - THRESHOLD) {
+          label = 'Primary';
+        } else if (secondMax > -1 && s >= secondMax - THRESHOLD && s < maxRaw - THRESHOLD) {
+          label = 'Secondary';
+        }
+        if (label) {
+          overrides[d.id] = {
+            label,
+            description: `${label} ${d.name} expression`,
+            recommendation: label === 'Primary'
+              ? `This is your dominant pattern — understand it deeply to improve your relationships.`
+              : `This secondary pattern activates in certain situations — notice when it shows up.`
+          };
+        }
+      });
+
+      // ── Attachment special combos ──────────────────────────────
+      const byName = Object.fromEntries(secDims.map(d => [d.name, d]));
+      const primaryIds = secDims.filter(d => overrides[d.id]?.label === 'Primary').map(d => d.name);
+      if (primaryIds.includes('Anxious') && primaryIds.includes('Avoidant')) {
+        ['Anxious','Avoidant'].forEach(n => { if (byName[n]) delete overrides[byName[n].id]; });
+        const target = byName['Anxious'] || secDims[0];
+        overrides[target.id] = { label: 'Anxious-Avoidant', description: 'Primary mixed attachment: both anxious and avoidant tendencies are dominant', recommendation: 'Working with a therapist on attachment patterns will be highly impactful for you.' };
+      } else if (primaryIds.includes('Anxious-Secure') && primaryIds.includes('Avoidant-Secure')) {
+        ['Anxious-Secure','Avoidant-Secure'].forEach(n => { if (byName[n]) delete overrides[byName[n].id]; });
+        const target = byName['Anxious-Secure'] || secDims[0];
+        overrides[target.id] = { label: 'Anxious-Avoidant / Secure', description: 'A complex blend showing both anxious-secure and avoidant-secure tendencies', recommendation: 'Explore your attachment patterns with a coach or therapist.' };
+      }
+    }
+  });
+
+  return overrides;
+}
+
+
 function visibleDims() {
   return DIMS.filter(d => d.show_in_results !== false);
 }
@@ -249,7 +351,7 @@ function maxScore(dimId) {
 // ═══════════════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════════════
-const S = { step: 0, answers: {}, contact: {}, submitted: false, shuffledOrders: {} };
+const S = { step: 0, answers: {}, contact: {}, submitted: false, shuffledOrders: {}, _hiddenDims: new Set() };
 let _drag = null;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -475,7 +577,7 @@ function rResults() {
           <p style="color:${esc(brand.textColor)}">Your personalized breakdown across each dimension.</p>
           ${tiedTop.length > 1 ? `<div style="margin-top:12px;padding:5px 16px;background:${esc(brand.primaryColor)}18;border-radius:20px;display:inline-block;font-size:12px;color:${esc(brand.primaryColor)};font-weight:700">Tied results across ${tiedTop.length} dimensions</div>` : ''}
         </div>
-        ${DIMS.filter(d => d.show_in_results !== false).map(d => {
+        ${DIMS.filter(d => d.show_in_results !== false && !S._hiddenDims.has(d.id)).map(d => {
           const score = scores?.[d.id] || 0; const mx = maxScore(d.id);
           const pct = Math.min(100, Math.round((score / mx) * 100));
           const rank = ranks?.[d.id]; const isTied = tiedTop.includes(d.id);
@@ -587,10 +689,15 @@ function nextStep() {
 }
 
 async function submitAssessment() {
-  const scores   = calcScores(S.answers);
-  const ranks    = getRanks(scores);
-  const tiedTop  = getTied(scores);
-  S._scores = scores; S._ranks = ranks; S._tiedTop = tiedTop;
+  const scores    = calcScores(S.answers);
+  const ranks     = getRanks(scores);
+  const tiedTop   = getTied(scores);
+  S._hiddenDims = new Set();
+  const overrides = classifyAll(scores);
+  // Merge overrides into ranks (dynamic formulas beat static ranges)
+  const finalRanks = { ...ranks };
+  Object.entries(overrides).forEach(([dimId, r]) => { finalRanks[dimId] = r; });
+  S._scores = scores; S._ranks = finalRanks; S._tiedTop = tiedTop;
 
   // Build response record
   const response = {
