@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assessment</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<style>
+/* ── CONFIG: these values are injected at deploy time ── */
+/* See deployment guide for envsubst / Docker setup     */
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;min-height:100vh;-webkit-font-smoothing:antialiased}
+
+/* Loading & Error */
+.vs-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px;color:#64748b}
+.vs-spinner{width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin .7s linear infinite}
+.vs-error{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:40px;gap:12px;color:#64748b}
+.vs-error i{font-size:48px;color:#e2e8f0}
+.vs-error h2{font-size:18px;font-weight:600;color:#1e293b}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Take flow */
+.take-wrap{display:flex;flex-direction:column;min-height:100vh}
+.take-bar{flex-shrink:0;border-bottom:1px solid var(--vs-border,#e2e8f0)}
+.take-bar-inner{max-width:660px;margin:0 auto;padding:12px 20px}
+.take-logo{height:28px;object-fit:contain;max-width:160px}
+.take-logo-text{font-weight:700;font-size:14px}
+.take-meta{font-size:12px;opacity:.5}
+.take-prog-wrap{margin-top:10px;height:4px;border-radius:2px;overflow:hidden}
+.take-prog-fill{height:100%;border-radius:2px;transition:width .35s ease}
+.take-body{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:48px 20px 24px}
+.qcard{border-radius:14px;padding:36px;max-width:620px;width:100%}
+.qcard h2{font-size:19px;font-weight:700;margin-bottom:6px;line-height:1.35}
+.qcard .qdesc{font-size:13px;opacity:.6;margin-bottom:20px;line-height:1.5}
+.opt-btn{width:100%;text-align:left;padding:12px 16px;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;transition:all .12s;margin-bottom:8px;display:flex;align-items:center;gap:10px;border:1.5px solid;outline:none;background:transparent}
+.opt-c{width:18px;height:18px;border-radius:50%;border:2px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.opt-ck{width:18px;height:18px;border-radius:4px;border:2px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px}
+.rank-list{display:flex;flex-direction:column;gap:7px}
+.rank-item{display:flex;align-items:center;gap:10px;padding:11px 14px;border:1.5px solid;border-radius:12px;cursor:grab;-webkit-user-select:none;user-select:none;transition:all .12s}
+.rank-item:active{cursor:grabbing}
+.rank-item.drag-over{border-style:dashed;opacity:.6}
+.rank-item.dragging{opacity:.25}
+.rank-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+.rank-hdl{font-size:18px;opacity:.3;flex-shrink:0}
+.rank-txt{flex:1;font-size:14px;font-weight:500}
+.rank-arr{display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.rarr{background:transparent;border:none;cursor:pointer;padding:2px 4px;opacity:.3;border-radius:4px;font-size:12px;line-height:1}
+.rarr:hover:not(:disabled){opacity:1;background:rgba(0,0,0,.07)}
+.rarr:disabled{opacity:.1;cursor:default}
+.take-nav{flex-shrink:0;padding:14px 24px}
+.take-nav-inner{max-width:620px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
+.tg{display:inline-flex;align-items:center;gap:5px;padding:9px 16px;background:transparent;border:none;font-size:14px;cursor:pointer;font-family:inherit;border-radius:8px;transition:background .12s}
+.tg:disabled{opacity:.35;cursor:default}
+.tg:hover:not(:disabled){background:rgba(0,0,0,.06)}
+.tp{display:inline-flex;align-items:center;gap:5px;padding:10px 22px;border:none;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;color:#fff;transition:opacity .12s}
+.tp:hover{opacity:.88}.tp:disabled{opacity:.45;cursor:default}
+.pdots{display:flex;gap:5px;align-items:center}
+.pdot{width:7px;height:7px;border-radius:50%;transition:background .2s}
+/* Contact form inputs */
+.cf-label{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;opacity:.5;margin-bottom:4px}
+.cf-input{width:100%;padding:10px 12px;border:1px solid;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .12s,box-shadow .12s;background:transparent}
+/* Results */
+.results-wrap{display:flex;flex-direction:column;align-items:center;padding:48px 20px}
+.results-inner{max-width:660px;width:100%}
+.result-hero{border-radius:14px;padding:28px;margin-bottom:14px;text-align:center}
+.result-hero h1{font-size:22px;font-weight:700;margin-bottom:8px}
+.result-hero p{font-size:14px;opacity:.65}
+.dim-result{border-radius:12px;padding:20px;margin-bottom:10px;border:1px solid}
+.score-bar-wrap{height:7px;border-radius:4px;margin:8px 0 5px;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:4px;transition:width .8s ease}
+.dim-label{font-size:11px;opacity:.4;margin-bottom:10px}
+.dim-desc{font-size:14px;font-weight:500;margin-bottom:8px}
+.dim-rec{padding:9px 13px;border-radius:0 6px 6px 0;font-size:13px;line-height:1.5;border-left:3px solid}
+.top-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;color:#fff}
+/* Toast */
+.toast{position:fixed;top:16px;right:16px;z-index:9999;padding:11px 15px;border-radius:9px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px;box-shadow:0 6px 20px rgba(0,0,0,.14);animation:tslide .2s ease}
+.tok{background:#022c22;color:#34d399}.terr{background:#450a0a;color:#f87171}
+@keyframes tslide{from{transform:translateX(50px);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="vs-loading">
+    <div class="vs-spinner"></div>
+    <div style="font-size:14px">Loading assessment...</div>
+  </div>
+</div>
+<div id="toast-r"></div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════════
+// CONFIG — injected at deploy time via envsubst in Dockerfile
+// Replace __VARS__ with your actual values before serving.
+// ═══════════════════════════════════════════════════════════════════
+const CFG = {
+  supabaseUrl:  (typeof __SUPABASE_URL__  !== 'undefined' ? __SUPABASE_URL__  : '') || '',
+  supabaseKey:  (typeof __SUPABASE_KEY__  !== 'undefined' ? __SUPABASE_KEY__  : '') || '',
+  playerOrigin: (typeof __PLAYER_ORIGIN__ !== 'undefined' ? __PLAYER_ORIGIN__ : '') || window.location.origin,
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// URL PARSING
+// Supports: /a/{id}  and  ?id={id}
+// Embed params: ?embed=1&redirect=https://...&bgcolor=...
+// ═══════════════════════════════════════════════════════════════════
+const QPS       = new URLSearchParams(window.location.search);
+const pathMatch = window.location.pathname.match(/\/a\/([^/?#]+)/);
+const ASM_ID    = pathMatch?.[1] || QPS.get('id') || '';
+const IS_EMBED  = QPS.get('embed') === '1';
+const REDIRECT  = QPS.get('redirect') || '';
+
+// ═══════════════════════════════════════════════════════════════════
+// SUPABASE REST HELPERS
+// ═══════════════════════════════════════════════════════════════════
+async function sbGet(table, params = '') {
+  const url = `${CFG.supabaseUrl}/rest/v1/${table}${params ? '?' + params : ''}`;
+  const r = await fetch(url, {
+    headers: {
+      'apikey': CFG.supabaseKey,
+      'Authorization': 'Bearer ' + CFG.supabaseKey,
+      'Accept': 'application/json',
+    }
+  });
+  if (!r.ok) throw new Error(`Supabase GET ${table} failed: ${r.status}`);
+  return r.json();
+}
+
+async function sbInsert(table, data) {
+  const url = `${CFG.supabaseUrl}/rest/v1/${table}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'apikey': CFG.supabaseKey,
+      'Authorization': 'Bearer ' + CFG.supabaseKey,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    },
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) {
+    const err = await r.text();
+    throw new Error(`Supabase INSERT ${table} failed: ${r.status} ${err}`);
+  }
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows[0] : rows;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DATA LOADING
+// ═══════════════════════════════════════════════════════════════════
+let ASM, DIMS, SECS, QS_MAP, QS_ORDERED;
+
+async function loadAssessment() {
+  if (!ASM_ID) throw new Error('No assessment ID provided.');
+  const [asms, dims, secs, qs] = await Promise.all([
+    sbGet('ab_assessments', `id=eq.${ASM_ID}&status=eq.published&select=*`),
+    sbGet('ab_dimensions',  `assessment_id=eq.${ASM_ID}&order=order_index&select=*`),
+    sbGet('ab_sections',    `assessment_id=eq.${ASM_ID}&order=order_index&select=*`),
+    sbGet('ab_questions',   `assessment_id=eq.${ASM_ID}&order=order_index&select=*`),
+  ]);
+  if (!asms.length) throw new Error('Assessment not found or not published.');
+  ASM  = asms[0];
+  DIMS = dims;
+  SECS = secs;
+
+  // Build ordered question list: by section order then question order
+  const secOrder = Object.fromEntries(secs.map((s, i) => [s.id, i]));
+  QS_ORDERED = [...qs].sort((a, b) => {
+    const si = a.section_id ? (secOrder[a.section_id] ?? 999) : 999;
+    const sj = b.section_id ? (secOrder[b.section_id] ?? 999) : 999;
+    if (si !== sj) return si - sj;
+    return (a.order_index || 0) - (b.order_index || 0);
+  });
+  QS_MAP = Object.fromEntries(qs.map(q => [q.id, q]));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SCORING
+// ═══════════════════════════════════════════════════════════════════
+function calcScores(answers) {
+  const s = Object.fromEntries(DIMS.map(d => [d.id, 0]));
+  QS_ORDERED.forEach(q => {
+    if (q.type === 'multiple_choice' && answers[q.id]) {
+      const opt = (q.options || []).find(o => o.id === answers[q.id]);
+      if (opt?.scores) Object.entries(opt.scores).forEach(([k, v]) => { if (s[k] !== undefined) s[k] += Number(v); });
+    }
+    if (q.type === 'multi_select' && Array.isArray(answers[q.id])) {
+      answers[q.id].forEach(oid => {
+        const opt = (q.options || []).find(o => o.id === oid);
+        if (opt?.scores) Object.entries(opt.scores).forEach(([k, v]) => { if (s[k] !== undefined) s[k] += Number(v); });
+      });
+    }
+    if (q.type === 'ranking' && Array.isArray(answers[q.id]) && answers[q.id].length) {
+      const order = answers[q.id]; const n = order.length;
+      const weights = q.position_weights?.length === n ? q.position_weights : Array.from({length: n}, (_, i) => n - i);
+      order.forEach((optId, idx) => {
+        const opt = (q.options || []).find(o => o.id === optId);
+        const w = Number(weights[idx]) || 0;
+        if (opt?.scores) Object.entries(opt.scores).forEach(([k, v]) => { if (s[k] !== undefined) s[k] += Number(v) * w; });
+      });
+    }
+  });
+  return s;
+}
+
+function getRanks(scores) {
+  return Object.fromEntries(DIMS.map(d => {
+    const s = scores[d.id] || 0;
+    const r = (d.ranges || []).find(r => s >= r.min && s <= r.max);
+    return [d.id, r || { label: 'N/A', description: '', recommendation: '' }];
+  }));
+}
+
+function getTied(scores) {
+  const vals = Object.values(scores);
+  if (!vals.length) return [];
+  const mx = Math.max(...vals);
+  return Object.entries(scores).filter(([, v]) => v === mx).map(([id]) => id);
+}
+
+function maxScore(dimId) {
+  let m = 0;
+  QS_ORDERED.forEach(q => {
+    if (q.type === 'multiple_choice') {
+      const sc = (q.options || []).map(o => Number(o.scores?.[dimId] || 0));
+      if (sc.length) m += Math.max(0, ...sc);
+    }
+    if (q.type === 'multi_select') {
+      (q.options || []).forEach(o => { const s = Number(o.scores?.[dimId] || 0); if (s > 0) m += s; });
+    }
+    if (q.type === 'ranking') {
+      const opts = q.options || []; const n = opts.length;
+      const weights = q.position_weights?.length === n ? q.position_weights : Array.from({length: n}, (_, i) => n - i);
+      const maxW = n ? Math.max(...weights) : 0;
+      const maxS = Math.max(0, ...opts.map(o => Number(o.scores?.[dimId] || 0)));
+      m += maxS * maxW;
+    }
+  });
+  return m || 1;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+const S = { step: 0, answers: {}, contact: {}, submitted: false };
+let _drag = null;
+
+// ═══════════════════════════════════════════════════════════════════
+// EMBED COMMUNICATION
+// ═══════════════════════════════════════════════════════════════════
+function notifyResize() {
+  if (!IS_EMBED) return;
+  const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+  window.parent.postMessage({ type: 'vs:resize', height: h, assessmentId: ASM_ID }, '*');
+}
+
+function notifyComplete() {
+  if (IS_EMBED) {
+    window.parent.postMessage({ type: 'vs:complete', assessmentId: ASM_ID, redirect: REDIRECT }, '*');
+  } else if (REDIRECT) {
+    setTimeout(() => { window.location.href = REDIRECT; }, 2000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BRAND HELPERS
+// ═══════════════════════════════════════════════════════════════════
+const DB = { primaryColor:'#2563eb', bgColor:'#f8fafc', textColor:'#1e293b', surfaceColor:'#ffffff', borderColor:'#e2e8f0', logoUrl:'', fontFamily:'system-ui, sans-serif', btnRadius:'8', cardRadius:'12' };
+const b = () => ({ ...DB, ...(ASM?.brand || {}) });
+const br = () => parseInt(b().btnRadius) || 8;
+const cr = () => parseInt(b().cardRadius) || 12;
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════════
+function render() {
+  const root = document.getElementById('root');
+  if (S.submitted) {
+    root.innerHTML = rResults();
+  } else {
+    root.innerHTML = rTake();
+  }
+  applyBodyBrand();
+  requestAnimationFrame(() => { notifyResize(); });
+}
+
+function applyBodyBrand() {
+  const brand = b();
+  document.body.style.background = brand.bgColor;
+  document.body.style.fontFamily  = brand.fontFamily;
+  document.body.style.color       = brand.textColor;
+  if (!document.getElementById('vs-hover-style')) {
+    const s = document.createElement('style');
+    s.id = 'vs-hover-style';
+    document.head.appendChild(s);
+  }
+  document.getElementById('vs-hover-style').textContent =
+    `.opt-btn:hover { border-color: ${brand.primaryColor} !important; background: ${brand.primaryColor}14 !important; }`;
+}
+
+function rTake() {
+  const brand = b();const q = QS_ORDERED[S.step];const total = QS_ORDERED.length;
+  const pct = Math.round((S.step / total) * 100);
+  return `
+    <div class="take-wrap" style="background:${esc(brand.bgColor)};color:${esc(brand.textColor)}">
+      <div class="take-bar" style="background:${esc(brand.surfaceColor)};border-bottom-color:${esc(brand.borderColor)}">
+        <div class="take-bar-inner">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            ${brand.logoUrl
+              ? `<img src="${esc(brand.logoUrl)}" class="take-logo" onerror="this.style.display='none'" alt="">`
+              : `<div class="take-logo-text" style="color:${esc(brand.primaryColor)}">${esc(ASM.title)}</div>`}
+            <span class="take-meta" style="color:${esc(brand.textColor)}">${S.step + 1} / ${total}</span>
+          </div>
+          <div class="take-prog-wrap" style="background:${esc(brand.borderColor)}">
+            <div class="take-prog-fill" style="width:${pct}%;background:${esc(brand.primaryColor)}"></div>
+          </div>
+        </div>
+      </div>
+      <div class="take-body">${rQ(q, brand)}</div>
+      <div class="take-nav" style="background:${esc(brand.surfaceColor)};border-top:1px solid ${esc(brand.borderColor)}">
+        <div class="take-nav-inner">
+          <button class="tg" onclick="prevStep()" ${S.step === 0 ? 'disabled' : ''} style="color:${esc(brand.textColor)}">
+            <i class="ti ti-arrow-left"></i> Back
+          </button>
+          <div class="pdots">${QS_ORDERED.map((_, i) =>
+            `<div class="pdot" style="background:${i === S.step ? brand.primaryColor : i < S.step ? brand.primaryColor + '44' : brand.borderColor}"></div>`
+          ).join('')}</div>
+          <button class="tp" onclick="nextStep()" style="background:${esc(brand.primaryColor)};border-radius:${br()}px">
+            ${S.step === total - 1 ? '<i class="ti ti-check"></i> Submit' : 'Next <i class="ti ti-arrow-right"></i>'}
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function rQ(q, brand) {
+  const cardR = cr(); const btnR = br();
+  const cs = `background:${esc(brand.surfaceColor)};border:1px solid ${esc(brand.borderColor)};border-radius:${cardR}px;color:${esc(brand.textColor)}`;
+
+  if (q.type === 'instruction') return `<div class="qcard" style="${cs}">
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:14px">${esc(q.title)}</h2>
+    ${q.description ? `<p style="font-size:15px;line-height:1.75;opacity:.7">${esc(q.description)}</p>` : ''}
+  </div>`;
+
+  if (q.type === 'contact_form') {
+    const fields = q.contact_fields || [];
+    return `<div class="qcard" style="${cs}">
+      <h2 style="font-size:19px;font-weight:700;margin-bottom:16px">${esc(q.title)}</h2>
+      ${fields.map(f => `<div style="margin-bottom:14px">
+        <label class="cf-label" style="color:${esc(brand.textColor)}">${esc(f.label)}${f.required ? ' *' : ''}</label>
+        <input type="${esc(f.type || 'text')}" id="cf_${esc(f.label.replace(/\s+/g,'_'))}"
+          value="${esc(S.contact[f.label] || '')}"
+          class="cf-input" style="border-color:${esc(brand.borderColor)};background:${esc(brand.bgColor)};color:${esc(brand.textColor)};border-radius:${Math.max(2, btnR - 2)}px"
+          oninput="S.contact['${esc(f.label)}']=this.value" placeholder="${esc(f.label)}">
+      </div>`).join('')}
+    </div>`;
+  }
+
+  if (q.type === 'multiple_choice') {
+    const sel = S.answers[q.id];
+    return `<div class="qcard" style="${cs}">
+      <h2>${esc(q.title)}</h2>
+      ${q.description ? `<p class="qdesc">${esc(q.description)}</p>` : '<div style="height:16px"></div>'}
+      ${(q.options || []).map(opt => `
+        <button class="opt-btn" onclick="selOpt('${q.id}','${opt.id}')"
+          style="border-color:${sel===opt.id ? brand.primaryColor : brand.borderColor};background:${sel===opt.id ? brand.primaryColor+'18' : 'transparent'};color:${sel===opt.id ? brand.primaryColor : brand.textColor};border-radius:${Math.max(0,cardR-4)}px">
+          <div class="opt-c" style="border-color:${sel===opt.id ? brand.primaryColor : brand.borderColor+'88'};background:${sel===opt.id ? brand.primaryColor : 'transparent'}">
+            ${sel===opt.id ? `<div style="width:7px;height:7px;border-radius:50%;background:white"></div>` : ''}
+          </div>${esc(opt.text)}
+        </button>`).join('')}
+    </div>`;
+  }
+
+  if (q.type === 'multi_select') {
+    const sel = Array.isArray(S.answers[q.id]) ? S.answers[q.id] : [];
+    return `<div class="qcard" style="${cs}">
+      <h2>${esc(q.title)}</h2>
+      <p class="qdesc">Select all that apply</p>
+      ${(q.options || []).map(opt => { const is = sel.includes(opt.id); return `
+        <button class="opt-btn" onclick="togMulti('${q.id}','${opt.id}')"
+          style="border-color:${is ? brand.primaryColor : brand.borderColor};background:${is ? brand.primaryColor+'18' : 'transparent'};color:${is ? brand.primaryColor : brand.textColor};border-radius:${Math.max(0,cardR-4)}px">
+          <div class="opt-ck" style="border-color:${is ? brand.primaryColor : brand.borderColor+'88'};background:${is ? brand.primaryColor : 'transparent'}">
+            ${is ? '<i class="ti ti-check" style="font-size:11px;color:white"></i>' : ''}
+          </div>${esc(opt.text)}
+        </button>`; }).join('')}
+    </div>`;
+  }
+
+  if (q.type === 'ranking') {
+    const opts = q.options || [];
+    if (!Array.isArray(S.answers[q.id]) || S.answers[q.id].length !== opts.length)
+      S.answers[q.id] = opts.map(o => o.id);
+    const order = S.answers[q.id];
+    const oMap = Object.fromEntries(opts.map(o => [o.id, o]));
+    const n = order.length;
+    return `<div class="qcard" style="${cs}">
+      <h2>${esc(q.title)}</h2>
+      <p class="qdesc">${esc(q.description) || 'Drag to reorder — most important at the top'}</p>
+      <div class="rank-list">
+        ${order.map((optId, idx) => {
+          const opt = oMap[optId] || { text: optId };
+          return `<div class="rank-item" data-opt="${optId}"
+            draggable="true"
+            ondragstart="dSt(event,'${q.id}','${optId}')"
+            ondragover="dOv(event,'${q.id}','${optId}')"
+            ondrop="dDr(event,'${q.id}','${optId}')"
+            ondragend="dEnd()"
+            style="border-color:${idx===0 ? brand.primaryColor : brand.borderColor};background:${idx===0 ? brand.primaryColor+'14' : brand.surfaceColor};color:${idx===0 ? brand.primaryColor : brand.textColor}">
+            <div class="rank-num" style="background:${idx===0 ? brand.primaryColor : brand.borderColor};color:${idx===0 ? '#fff' : brand.textColor}">${idx+1}</div>
+            <div class="rank-hdl" style="color:${brand.textColor}">⠇</div>
+            <div class="rank-txt">${esc(opt.text)}</div>
+            <div class="rank-arr">
+              <button class="rarr" onclick="mvRk('${q.id}','${optId}',-1)" ${idx===0?'disabled':''} style="color:${brand.textColor}"><i class="ti ti-chevron-up" style="font-size:13px"></i></button>
+              <button class="rarr" onclick="mvRk('${q.id}','${optId}',1)" ${idx===n-1?'disabled':''} style="color:${brand.textColor}"><i class="ti ti-chevron-down" style="font-size:13px"></i></button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <p style="font-size:11px;opacity:.35;margin-top:12px;text-align:center"><i class="ti ti-arrows-up-down" style="font-size:12px"></i> Drag or use arrows to reorder</p>
+    </div>`;
+  }
+
+  if (q.type === 'text') return `<div class="qcard" style="${cs}">
+    <h2 style="margin-bottom:16px">${esc(q.title)}</h2>
+    <textarea rows="5" oninput="S.answers['${q.id}']=this.value"
+      style="width:100%;padding:12px;border:1px solid ${esc(brand.borderColor)};border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;background:${esc(brand.bgColor)};color:${esc(brand.textColor)};outline:none">${esc(S.answers[q.id]||'')}</textarea>
+  </div>`;
+
+  return '';
+}
+
+function rResults() {
+  const brand = b(); const scores = S._scores; const ranks = S._ranks;
+  const tiedTop = S._tiedTop || [];const cardR = cr(); const btnR = br();
+  return `
+    <div class="results-wrap" style="background:${esc(brand.bgColor)};font-family:${esc(brand.fontFamily||'system-ui,sans-serif')}">
+      <div class="results-inner">
+        ${brand.logoUrl ? `<div style="text-align:center;margin-bottom:24px"><img src="${esc(brand.logoUrl)}" style="height:34px;object-fit:contain" onerror="this.style.display='none'" alt=""></div>` : ''}
+        <div class="result-hero" style="background:${esc(brand.surfaceColor)};border:1px solid ${esc(brand.borderColor)};border-radius:${cardR}px">
+          <div style="width:52px;height:52px;border-radius:50%;background:${esc(brand.primaryColor)}22;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+            <i class="ti ti-check" style="font-size:26px;color:${esc(brand.primaryColor)}"></i>
+          </div>
+          <h1 style="color:${esc(brand.textColor)}">Your Results Are In</h1>
+          <p style="color:${esc(brand.textColor)}">Your personalized breakdown across each dimension.</p>
+          ${tiedTop.length > 1 ? `<div style="margin-top:12px;padding:5px 16px;background:${esc(brand.primaryColor)}18;border-radius:20px;display:inline-block;font-size:12px;color:${esc(brand.primaryColor)};font-weight:700">Tied results across ${tiedTop.length} dimensions</div>` : ''}
+        </div>
+        ${DIMS.map(d => {
+          const score = scores?.[d.id] || 0; const mx = maxScore(d.id);
+          const pct = Math.min(100, Math.round((score / mx) * 100));
+          const rank = ranks?.[d.id]; const isTied = tiedTop.includes(d.id);
+          return `<div class="dim-result" style="border-color:${isTied ? brand.primaryColor : brand.borderColor};${isTied ? 'box-shadow:0 0 0 2px '+brand.primaryColor : ''}">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:10px;height:10px;border-radius:50%;background:${esc(d.color||brand.primaryColor)}"></div>
+                <strong style="color:${esc(brand.textColor)}">${esc(d.name)}</strong>
+                ${isTied ? `<span class="top-badge" style="background:${esc(brand.primaryColor)}">★ Top${tiedTop.length>1?' (Tied)':''}</span>` : ''}
+              </div>
+              ${rank ? `<span style="color:${esc(d.color||brand.primaryColor)};font-size:13px;font-weight:700">${esc(rank.label)}</span>` : ''}
+            </div>
+            <div class="score-bar-wrap" style="background:${esc(brand.borderColor)}"><div class="score-bar-fill" style="width:${pct}%;background:${esc(d.color||brand.primaryColor)}"></div></div>
+            <div class="dim-label" style="color:${esc(brand.textColor)}">${score} pts (${pct}%)</div>
+            ${rank?.description ? `<p class="dim-desc" style="color:${esc(brand.textColor)}">${esc(rank.description)}</p>` : ''}
+            ${rank?.recommendation ? `<div class="dim-rec" style="background:${esc(brand.bgColor)};border-left-color:${esc(d.color||brand.primaryColor)};color:${esc(brand.textColor)}"><strong>Next step:</strong> ${esc(rank.recommendation)}</div>` : ''}
+          </div>`;
+        }).join('')}
+        <div style="text-align:center;margin-top:20px">
+          <button onclick="restart()" style="background:transparent;color:${esc(brand.textColor)};border:1px solid ${esc(brand.borderColor)};padding:11px 22px;border-radius:${btnR}px;font-size:14px;cursor:pointer;font-family:inherit">Retake Assessment</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INTERACTIONS
+// ═══════════════════════════════════════════════════════════════════
+function selOpt(qId, optId) { S.answers[qId] = optId; render(); }
+function togMulti(qId, optId) {
+  const cur = Array.isArray(S.answers[qId]) ? [...S.answers[qId]] : [];
+  const i = cur.indexOf(optId);
+  if (i >= 0) cur.splice(i, 1); else cur.push(optId);
+  S.answers[qId] = cur; render();
+}
+function mvRk(qId, optId, dir) {
+  const order = [...(S.answers[qId] || [])];
+  const i = order.indexOf(optId); const j = i + dir;
+  if (j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]]; S.answers[qId] = order; render();
+}
+
+// Drag and drop
+function dSt(e, qId, optId) { _drag = { qId, optId }; e.dataTransfer.effectAllowed = 'move'; document.querySelector(`[data-opt="${optId}"]`)?.classList.add('dragging'); }
+function dOv(e, qId, optId) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; document.querySelectorAll('.rank-item').forEach(el => el.classList.remove('drag-over')); document.querySelector(`[data-opt="${optId}"]`)?.classList.add('drag-over'); }
+function dDr(e, qId, targetId) {
+  e.preventDefault(); document.querySelectorAll('.rank-item').forEach(el => el.classList.remove('drag-over', 'dragging'));
+  if (!_drag || _drag.optId === targetId) { _drag = null; return; }
+  const order = [...(S.answers[qId] || [])];
+  const fi = order.indexOf(_drag.optId); const ti = order.indexOf(targetId);
+  if (fi < 0 || ti < 0) { _drag = null; return; }
+  order.splice(fi, 1); order.splice(ti, 0, _drag.optId);
+  S.answers[qId] = order; _drag = null; render();
+}
+function dEnd() { document.querySelectorAll('.rank-item').forEach(el => el.classList.remove('drag-over', 'dragging')); _drag = null; }
+
+function prevStep() { if (S.step > 0) { S.step--; render(); window.scrollTo(0, 0); } }
+function nextStep() {
+  const q = QS_ORDERED[S.step];
+  if (q.required) {
+    if (q.type === 'multiple_choice' && !S.answers[q.id]) { toast('Please select an answer', 'err'); return; }
+    if (q.type === 'multi_select' && (!S.answers[q.id] || !S.answers[q.id].length)) { toast('Please select at least one option', 'err'); return; }
+    if (q.type === 'contact_form') {
+      (q.contact_fields || []).forEach(f => {
+        const el = document.getElementById(`cf_${f.label.replace(/\s+/g,'_')}`);
+        if (el) S.contact[f.label] = el.value;
+      });
+      for (const f of (q.contact_fields || [])) {
+        if (f.required && !S.contact[f.label]) { toast(`Please fill in "${f.label}"`, 'err'); return; }
+      }
+    }
+  } else if (q.type === 'contact_form') {
+    (q.contact_fields || []).forEach(f => {
+      const el = document.getElementById(`cf_${f.label.replace(/\s+/g,'_')}`);
+      if (el) S.contact[f.label] = el.value;
+    });
+  }
+  if (S.step < QS_ORDERED.length - 1) { S.step++; render(); window.scrollTo(0, 0); }
+  else { submitAssessment(); }
+}
+
+async function submitAssessment() {
+  const scores   = calcScores(S.answers);
+  const ranks    = getRanks(scores);
+  const tiedTop  = getTied(scores);
+  S._scores = scores; S._ranks = ranks; S._tiedTop = tiedTop;
+
+  // Build response record
+  const response = {
+    assessment_id:  ASM.id,
+    tenant_id:      ASM.tenant_id || null,
+    team_code:      S.contact['Team Code (Optional):'] || null,
+    contact:        { ...S.contact },
+    answers:        { ...S.answers },
+    scores:         Object.fromEntries(DIMS.map(d => [d.name, scores[d.id] || 0])),
+    ranks:          Object.fromEntries(DIMS.map(d => [d.name, ranks[d.id] || {}])),
+    tied_top:       tiedTop,
+    webhook_status: ASM.webhook_url ? 'pending' : 'not_configured',
+  };
+
+  let savedId = null;
+  try {
+    const saved = await sbInsert('ab_responses', response);
+    savedId = saved?.id;
+  } catch (e) {
+    console.error('Could not save response:', e);
+    // Still show results even if save fails
+  }
+
+  S.submitted = true;
+  render();
+  notifyComplete();
+
+  // Fire webhook async (don't block results display)
+  if (ASM.webhook_url && savedId) {
+    fireWebhook(ASM, { ...response, id: savedId });
+  }
+}
+
+async function fireWebhook(asm, resp) {
+  const dimNameMap = Object.fromEntries(DIMS.map(d => [d.id, d.name]));
+  const payload = {
+    responseId:      resp.id,
+    assessmentId:    asm.id,
+    assessmentTitle: asm.title,
+    submittedAt:     new Date().toISOString(),
+    contact:         resp.contact,
+    scores:          resp.scores,
+    ranks:           resp.ranks,
+    tiedTopDimensions: (resp.tied_top || []).map(id => dimNameMap[id] || id),
+    topDimension:    dimNameMap[(resp.tied_top || [])[0]] || null,
+  };
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    try { if (asm.webhook_headers) Object.assign(headers, JSON.parse(asm.webhook_headers)); } catch {}
+    await fetch(asm.webhook_url, { method: 'POST', headers, body: JSON.stringify(payload) });
+  } catch (e) { console.error('Webhook failed:', e); }
+}
+
+function restart() {
+  S.step = 0; S.answers = {}; S.contact = {}; S.submitted = false;
+  S._scores = null; S._ranks = null; S._tiedTop = null;
+  render();
+  window.scrollTo(0, 0);
+}
+
+function toast(msg, type = 'ok') {
+  const r = document.getElementById('toast-r');
+  if (!r) return;
+  r.innerHTML = `<div class="toast ${type === 'err' ? 'terr' : 'tok'}"><i class="ti ${type==='err'?'ti-alert-circle':'ti-circle-check'}"></i> ${esc(msg)}</div>`;
+  setTimeout(() => { r.innerHTML = ''; }, 3500);
+}
+
+function showError(msg) {
+  document.getElementById('root').innerHTML = `
+    <div class="vs-error">
+      <i class="ti ti-alert-circle"></i>
+      <h2>Assessment Unavailable</h2>
+      <p>${esc(String(msg))}</p>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════
+if (!CFG.supabaseUrl || !CFG.supabaseKey) {
+  showError('Player not configured. Set SUPABASE_URL and SUPABASE_KEY in your deployment.');
+} else if (!ASM_ID) {
+  showError('No assessment ID provided. Use /a/{id} or ?id={id}.');
+} else {
+  loadAssessment()
+    .then(render)
+    .catch(err => {
+      console.error(err);
+      showError(err.message || 'Could not load assessment.');
+    });
+}
+
+// Notify parent on resize events (for dynamic content)
+if (IS_EMBED) {
+  const ro = new ResizeObserver(() => notifyResize());
+  ro.observe(document.body);
+}
+</script>
+</body>
+</html>
