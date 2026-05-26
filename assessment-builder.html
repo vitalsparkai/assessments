@@ -431,7 +431,7 @@ async function fireWH(asm,resp,dims){
 }
 
 /* ══ STATE ══ */
-const S={view:'home',asmId:null,tab:'gen',answers:{},contact:{},step:0,preview:false,doneResp:null,modal:null,expandedSecs:{}};
+const S={view:'home',asmId:null,tab:'gen',answers:{},contact:{},step:0,preview:false,doneResp:null,modal:null,expandedSecs:{},shuffledOrders:{}};
 let _drag=null;
 
 function dSt(e,qId,optId){_drag={qId,optId};e.dataTransfer.effectAllowed='move';document.querySelector(`[data-opt="${optId}"]`)?.classList.add('dragging');}
@@ -441,6 +441,28 @@ function dEnd(){document.querySelectorAll('.rank-item').forEach(el=>el.classList
 function mvRk(qId,optId,dir){const order=[...(S.answers[qId]||[])];const i=order.indexOf(optId),j=i+dir;if(j<0||j>=order.length)return;[order[i],order[j]]=[order[j],order[i]];S.answers[qId]=order;render();}
 
 /* ══ RENDER ══ */
+function seededShuffle(arr, seed) {
+  // Simple seeded shuffle — consistent per question per session
+  const a = [...arr];
+  let s = seed;
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    const j = Math.abs(s) % (i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function getOpts(q) {
+  const opts = q.options || [];
+  if (!q.shuffleOptions || !opts.length) return opts;
+  if (!S.shuffledOrders[q.id]) {
+    // Generate a seed from question ID characters
+    const seed = q.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) + Date.now() % 9999;
+    S.shuffledOrders[q.id] = seededShuffle(opts.map(o => o.id), seed);
+  }
+  const order = S.shuffledOrders[q.id];
+  return order.map(id => opts.find(o => o.id === id)).filter(Boolean);
+}
 function render(){
   const app=document.getElementById('app');
   if(S.view==='take'){app.innerHTML=rTake();return;}
@@ -702,7 +724,7 @@ function rQ(q,b,cr,br){
       <input type="${esc(f.type||'text')}" id="cf-${esc(f.id)}" value="${esc(S.contact[f.label]||'')}" placeholder="${esc(f.label)}" style="width:100%;padding:10px 12px;border:1px solid ${esc(b.borderColor)};border-radius:${Math.max(2,br-2)}px;font-size:14px;font-family:inherit;color:${esc(b.textColor)};background:${esc(b.bgColor)};outline:none" oninput="S.contact['${esc(f.label)}']=this.value"></div>`).join('')}</div>`;
   }
   if(q.type==='ranking'){
-    const opts=q.options||[];
+    const opts=getOpts(q);
     if(!Array.isArray(S.answers[q.id])||S.answers[q.id].length!==opts.length)S.answers[q.id]=opts.map(o=>o.id);
     const order=S.answers[q.id];const oMap=Object.fromEntries(opts.map(o=>[o.id,o]));const n=order.length;
     return `<div class="qcard" style="${cs}">
@@ -729,13 +751,13 @@ function rQ(q,b,cr,br){
   if(q.type==='multiple_choice'){
     const sel=S.answers[q.id];
     return `<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:16px">${esc(q.title)}</h2>
-    ${(q.options||[]).map(opt=>`<button class="opt-btn hopt" onclick="slOp('${q.id}','${opt.id}')" style="border-color:${sel===opt.id?b.primaryColor:b.borderColor};background:${sel===opt.id?b.primaryColor+'18':b.surfaceColor};color:${sel===opt.id?b.primaryColor:b.textColor};border-radius:${Math.max(0,cr-4)}px">
+    ${getOpts(q).map(opt=>`<button class="opt-btn hopt" onclick="slOp('${q.id}','${opt.id}')" style="border-color:${sel===opt.id?b.primaryColor:b.borderColor};background:${sel===opt.id?b.primaryColor+'18':b.surfaceColor};color:${sel===opt.id?b.primaryColor:b.textColor};border-radius:${Math.max(0,cr-4)}px">
       <div class="opt-c" style="border-color:${sel===opt.id?b.primaryColor:b.borderColor+'77'};background:${sel===opt.id?b.primaryColor:'transparent'}">${sel===opt.id?`<div style="width:7px;height:7px;border-radius:50%;background:white"></div>`:''}</div>${esc(opt.text)}</button>`).join('')}</div>`;
   }
   if(q.type==='multi_select'){
     const sel=Array.isArray(S.answers[q.id])?S.answers[q.id]:[];
     return `<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:4px">${esc(q.title)}</h2><p style="font-size:13px;color:${esc(b.textColor)};opacity:.5;margin-bottom:16px">Select all that apply</p>
-    ${(q.options||[]).map(opt=>{const is=sel.includes(opt.id);return`<button class="opt-btn hopt" onclick="tgMs('${q.id}','${opt.id}')" style="border-color:${is?b.primaryColor:b.borderColor};background:${is?b.primaryColor+'18':b.surfaceColor};color:${is?b.primaryColor:b.textColor};border-radius:${Math.max(0,cr-4)}px"><div class="opt-ck" style="border-color:${is?b.primaryColor:b.borderColor+'77'};background:${is?b.primaryColor:'transparent'}">${is?`<i class="ti ti-check" style="font-size:11px;color:white"></i>`:''}</div>${esc(opt.text)}</button>`;}).join('')}</div>`;
+    ${getOpts(q).map(opt=>{const is=sel.includes(opt.id);return`<button class="opt-btn hopt" onclick="tgMs('${q.id}','${opt.id}')" style="border-color:${is?b.primaryColor:b.borderColor};background:${is?b.primaryColor+'18':b.surfaceColor};color:${is?b.primaryColor:b.textColor};border-radius:${Math.max(0,cr-4)}px"><div class="opt-ck" style="border-color:${is?b.primaryColor:b.borderColor+'77'};background:${is?b.primaryColor:'transparent'}">${is?`<i class="ti ti-check" style="font-size:11px;color:white"></i>`:''}</div>${esc(opt.text)}</button>`;}).join('')}</div>`;
   }
   if(q.type==='text')return`<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:16px">${esc(q.title)}</h2><textarea rows="5" placeholder="Your answer..." oninput="S.answers['${q.id}']=this.value" style="width:100%;padding:12px;border:1px solid ${esc(b.borderColor)};border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;color:${esc(b.textColor)};background:${esc(b.bgColor)};outline:none">${esc(S.answers[q.id]||'')}</textarea></div>`;
   return '';
@@ -824,7 +846,10 @@ function rQMod(){
       </div>
       <div class="fg"><label>${q.type==='instruction'?'Block Title':'Question / Prompt'}</label><input type="text" id="qm-ti" value="${esc(q.title||'')}" placeholder="What do you want to ask?"></div>
       <div class="fg"><label>Description / Subtext (optional)</label><textarea id="qm-de" rows="2">${esc(q.description||'')}</textarea></div>
-      ${q.type!=='instruction'?`<label class="tw mb4" style="display:inline-flex"><input type="checkbox" id="qm-rq" ${q.required!==false?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Required</span></label>`:''}
+      ${q.type!=='instruction'?`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px">
+      <label class="tw"><input type="checkbox" id="qm-rq" ${q.required!==false?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Required</span></label>
+      ${(q.type==='multiple_choice'||q.type==='multi_select'||q.type==='ranking')?`<label class="tw"><input type="checkbox" id="qm-sh" ${q.shuffleOptions?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Shuffle answers</span></label>`:''}
+    </div>`:''}
       ${pwHtml}
       ${optsHtml}
     </div>
@@ -948,7 +973,7 @@ async function crtAsm(){
 }
 function edAsm(id){S.asmId=id;S.tab='gen';S.view='ed';render();}
 function vwRes(id){S.asmId=id;S.view='res';render();}
-function prvAsm(id){S.asmId=id;S.preview=true;S.step=0;S.answers={};S.contact={};S.view='take';render();}
+function prvAsm(id){S.asmId=id;S.preview=true;S.step=0;S.answers={};S.contact={};S.shuffledOrders={};S.view='take';render();}
 async function dlAsm(id){if(!confirm('Delete this assessment and all responses?'))return;db.assessments=db.assessments.filter(a=>a.id!==id);delete db.questions[id];delete db.dimensions[id];if(db.sections)delete db.sections[id];delete db.responses[id];if(S.asmId===id){S.asmId=null;S.view='home';}sv();render();if(_session)sbDel('ab_assessments',id).catch(console.error);}
 function togSt(id){const a=db.assessments.find(a=>a.id===id);if(a){a.status=a.status==='published'?'draft':'published';sv();render();}}
 function svGen(){const a=db.assessments.find(a=>a.id===S.asmId);if(!a)return;a.title=document.getElementById('g-t').value;a.description=document.getElementById('g-d').value;a.status=document.getElementById('g-s').value;a.showResults=document.getElementById('g-sh').checked;sv();toast('Saved!');render();}
@@ -1033,6 +1058,7 @@ function svQ(){
   const secEl=document.getElementById('qm-sec');
   q.sectionId=secEl?secEl.value||null:q.sectionId;
   const re=document.getElementById('qm-rq');if(re)q.required=re.checked;
+  const sh=document.getElementById('qm-sh');if(sh)q.shuffleOptions=sh.checked;
   // Collect positionWeights from DOM for ranking
   if(q.type==='ranking'){
     const pws=[];document.querySelectorAll('.pw-item input').forEach(el=>pws.push(Number(el.value)||0));
@@ -1101,7 +1127,7 @@ function sbmA(){
   S.doneResp=resp;S.view='complete';render();window.scrollTo(0,0);
   if(!S.preview){const asm=gAsm();if(asm?.webhookUrl){fireWH(asm,resp,gDs()).then(r=>{const rr=(db.responses[S.asmId]||[]).find(x=>x.id===resp.id);if(rr){rr.webhookStatus=r.status;rr.webhookFiredAt=now();sv();}});}}
 }
-function rstA(){S.step=0;S.answers={};S.contact={};S.doneResp=null;S.view='take';render();}
+function rstA(){S.step=0;S.answers={};S.contact={};S.doneResp=null;S.shuffledOrders={};S.view='take';render();}
 function toast(msg,type='ok'){const r=document.getElementById('tr');if(!r)return;const ic={ok:'ti-circle-check',err:'ti-alert-circle',inf:'ti-info-circle'};const cl={ok:'tok',err:'terr',inf:'tinf'};r.innerHTML=`<div class="toast ${cl[type]||'tok'}"><i class="ti ${ic[type]||ic.ok}"></i> ${esc(msg)}</div>`;setTimeout(()=>{r.innerHTML='';},3800);}
 
 
