@@ -236,8 +236,8 @@ function qToDb(q,aId){return{id:q.id,assessment_id:aId||q.aId,section_id:q.secti
 function dbToQ(r){return{id:r.id,aId:r.assessment_id,sectionId:r.section_id,type:r.type,title:r.title||'',description:r.description||'',required:r.required!==false,orderIndex:r.order_index||0,positionWeights:r.position_weights||[],contactFields:r.contact_fields||[],options:r.options||[]};}
 function dimToDb(d,aId){return{id:d.id,assessment_id:aId||d.aId,name:d.name,description:d.description||'',color:d.color||'#3b82f6',order_index:d.orderIndex||0,ranges:d.ranges||[],show_in_results:d.showInResults!==false};}
 function dbToDim(r){return{id:r.id,aId:r.assessment_id,name:r.name,description:r.description||'',color:r.color||'#3b82f6',orderIndex:r.order_index||0,ranges:r.ranges||[],showInResults:r.show_in_results!==false};}
-function secToDb(s,aId){return{id:s.id,assessment_id:aId||s.aId,title:s.title,description:s.description||'',order_index:s.orderIndex||0,active_dim_ids:s.activeDimIds||[]};}
-function dbToSec(r){return{id:r.id,aId:r.assessment_id,title:r.title,description:r.description||'',orderIndex:r.order_index||0,activeDimIds:r.active_dim_ids||[]};}
+function secToDb(s,aId){return{id:s.id,assessment_id:aId||s.aId,title:s.title,description:s.description||'',order_index:s.orderIndex||0,active_dim_ids:s.activeDimIds||[],classification_formula:s.classificationFormula||'ranges'};}
+function dbToSec(r){return{id:r.id,aId:r.assessment_id,title:r.title,description:r.description||'',orderIndex:r.order_index||0,activeDimIds:r.active_dim_ids||[],classificationFormula:r.classification_formula||'ranges'};}
 
 /* ── DB LOAD ─────────────────────────────────────────────────────── */
 let db;
@@ -936,6 +936,15 @@ function rSecMod(){
       <div class="fg"><label>Section Title</label><input type="text" id="sec-t" value="${esc(sec.title||'')}" placeholder="e.g. Growth Priorities, Current Reality, Skills Assessment"></div>
       <div class="fg"><label>Description (optional)</label><input type="text" id="sec-d" value="${esc(sec.description||'')}" placeholder="Brief note about this section's focus"></div>
       <div class="fg">
+        <label>Classification Formula</label>
+        <select id="sec-cf">
+          <option value="ranges" ${(!sec.classificationFormula||sec.classificationFormula==='ranges')?'selected':''}>Static Ranges — fixed min/max thresholds (Motivators, DISC)</option>
+          <option value="pt_delta" ${sec.classificationFormula==='pt_delta'?'selected':''}>PT Delta — % of max, classify by delta from highest score (Personality Type)</option>
+          <option value="relative_max" ${sec.classificationFormula==='relative_max'?'selected':''}>Relative Max — classify by delta from highest raw score (Attachment, Polarity)</option>
+        </select>
+        <p class="tm tsm mt1"><i class="ti ti-info-circle"></i> PT Delta and Relative Max override static ranges with dynamic scoring logic matching the original classification formulas.</p>
+      </div>
+      <div class="fg">
         <div class="fx ic jb mb2">
           <label style="margin-bottom:0">Active Dimensions</label>
           <div class="fx g2">
@@ -1050,6 +1059,7 @@ function svSec(){
   s.title=document.getElementById('sec-t')?.value??s.title;
   s.description=document.getElementById('sec-d')?.value??s.description;
   s.activeDimIds=Array.from(document.querySelectorAll('#dim-checks input[type=checkbox]:checked')).map(el=>el.value);
+  s.classificationFormula=document.getElementById('sec-cf')?.value||'ranges';
   delete s._new;
   if(!db.sections)db.sections={};
   if(!db.sections[S.asmId])db.sections[S.asmId]=[];
