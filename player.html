@@ -222,6 +222,9 @@ function getTied(scores) {
   return Object.entries(scores).filter(([, v]) => v === mx).map(([id]) => id);
 }
 
+function visibleDims() {
+  return DIMS.filter(d => d.show_in_results !== false);
+}
 function maxScore(dimId) {
   let m = 0;
   QS_ORDERED.forEach(q => {
@@ -464,14 +467,15 @@ function rResults() {
       <div class="results-inner">
         ${brand.logoUrl ? `<div style="text-align:center;margin-bottom:24px"><img src="${esc(brand.logoUrl)}" style="height:34px;object-fit:contain" onerror="this.style.display='none'" alt=""></div>` : ''}
         <div class="result-hero" style="background:${esc(brand.surfaceColor)};border:1px solid ${esc(brand.borderColor)};border-radius:${cardR}px">
-          <div style="width:52px;height:52px;border-radius:50%;background:${esc(brand.primaryColor)}22;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+          ${S._saveError ? `<div style="background:#450a0a;color:#f87171;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:14px;text-align:left"><strong>⚠ Response not saved:</strong> ${esc(S._saveError)}</div>` : ''}
+        <div style="width:52px;height:52px;border-radius:50%;background:${esc(brand.primaryColor)}22;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
             <i class="ti ti-check" style="font-size:26px;color:${esc(brand.primaryColor)}"></i>
           </div>
           <h1 style="color:${esc(brand.textColor)}">Your Results Are In</h1>
           <p style="color:${esc(brand.textColor)}">Your personalized breakdown across each dimension.</p>
           ${tiedTop.length > 1 ? `<div style="margin-top:12px;padding:5px 16px;background:${esc(brand.primaryColor)}18;border-radius:20px;display:inline-block;font-size:12px;color:${esc(brand.primaryColor)};font-weight:700">Tied results across ${tiedTop.length} dimensions</div>` : ''}
         </div>
-        ${DIMS.map(d => {
+        ${DIMS.filter(d => d.show_in_results !== false).map(d => {
           const score = scores?.[d.id] || 0; const mx = maxScore(d.id);
           const pct = Math.min(100, Math.round((score / mx) * 100));
           const rank = ranks?.[d.id]; const isTied = tiedTop.includes(d.id);
@@ -490,9 +494,9 @@ function rResults() {
             ${rank?.recommendation ? `<div class="dim-rec" style="background:${esc(brand.bgColor)};border-left-color:${esc(d.color||brand.primaryColor)};color:${esc(brand.textColor)}"><strong>Next step:</strong> ${esc(rank.recommendation)}</div>` : ''}
           </div>`;
         }).join('')}
-        <div style="text-align:center;margin-top:20px">
+        ${ASM.allow_retakes !== false ? `<div style="text-align:center;margin-top:20px">
           <button onclick="restart()" style="background:transparent;color:${esc(brand.textColor)};border:1px solid ${esc(brand.borderColor)};padding:11px 22px;border-radius:${btnR}px;font-size:14px;cursor:pointer;font-family:inherit">Retake Assessment</button>
-        </div>
+        </div>` : ''}
       </div>
     </div>`;
 }
@@ -602,15 +606,18 @@ async function submitAssessment() {
   };
 
   let savedId = null;
+  let saveError = null;
   try {
     const saved = await sbInsert('ab_responses', response);
     savedId = saved?.id;
   } catch (e) {
     console.error('Could not save response:', e);
-    // Still show results even if save fails
+    saveError = e.message;
   }
 
   S.submitted = true;
+  S._saveError = saveError;
+  S._savedId = savedId;
   render();
   notifyComplete();
 
