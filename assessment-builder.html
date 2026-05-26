@@ -193,7 +193,13 @@ const QLA={instruction:'Instruction Block',contact_form:'Contact Form',multiple_
 
 const uid=()=>crypto.randomUUID();
 const now=()=>new Date().toISOString();
-const fd=iso=>new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+const fd=iso=>{
+  if(!iso)return 'Unknown';
+  // Supabase returns "2026-05-26 21:20:48+00" — normalize to ISO 8601
+  const s=String(iso).replace(' ','T').replace(/\+00$/,'+00:00');
+  const d=new Date(s);
+  return isNaN(d)?String(iso):d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+};
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 /* ══ DB ══ */
@@ -980,17 +986,32 @@ function rRR(r,i){return `<div class="rrow">
 /* ── RESPONSE MODAL ── */
 function rRMod(){
   const resp=S.modal.data;const dims=gDs();const asm=gAsm();const qs=orderedQs();
+  // Normalize field names — handle both camelCase (local db) and snake_case (Supabase direct)
+  const createdAt  = resp.createdAt || resp.created_at;
+  const webhookSt  = resp.webhookStatus || resp.webhook_status || 'not_configured';
+  const tiedTop    = resp.tiedTop || resp.tied_top || [];
+  // Parse scores/ranks/contact — may be string (if Supabase stored as text) or object
+  const parseJ = v => { try { return typeof v==='string' ? JSON.parse(v) : (v||{}); } catch{ return {}; } };
+  const scores = parseJ(resp.scores);
+  const ranks  = parseJ(resp.ranks);
+  const contact= parseJ(resp.contact);
+  // Scores keyed by dim NAME in Supabase; tiedTop keyed by dim ID
   return `<div class="mov" onclick="bgC(event)"><div class="modal mw">
     <div class="mhd"><h2>Response Detail</h2><div class="fx g2">${asm?.webhookUrl?`<button class="btn bs bsm" onclick="rfFromM('${resp.id}')"><i class="ti ti-refresh"></i> Refire</button>`:''}<button class="btn bg bic" onclick="clM()"><i class="ti ti-x"></i></button></div></div>
     <div class="mbd">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-        <div><p class="fgl mb2">Contact</p>${Object.entries(resp.contact||{}).map(([k,v])=>`<div class="fx mb2 g2"><span class="tm tsm" style="min-width:100px">${esc(k)}</span><strong class="tsm">${esc(v)}</strong></div>`).join('')||'<p class="tm tsm">No contact data</p>'}<p class="tm tsm mt2">Submitted: ${fd(resp.createdAt)}</p></div>
-        <div><p class="fgl mb2">Webhook</p><div class="fx ic g1 mb2"><i class="ti ${resp.webhookStatus==='success'?'ti-circle-check':'ti-minus'}" style="${resp.webhookStatus==='success'?'color:var(--ok)':'color:var(--muted)'}"></i><span class="tsm">${esc(resp.webhookStatus||'Not sent')}</span></div></div>
+        <div><p class="fgl mb2">Contact</p>${Object.entries(contact).map(([k,v])=>`<div class="fx mb2 g2"><span class="tm tsm" style="min-width:100px">${esc(k)}</span><strong class="tsm">${esc(String(v||''))}</strong></div>`).join('')||'<p class="tm tsm">No contact data</p>'}<p class="tm tsm mt2">Submitted: ${fd(createdAt)}</p></div>
+        <div><p class="fgl mb2">Webhook</p><div class="fx ic g1 mb2"><i class="ti ${webhookSt==='success'?'ti-circle-check':'ti-minus'}" style="${webhookSt==='success'?'color:var(--ok)':'color:var(--muted)'}"></i><span class="tsm">${esc(webhookSt)}</span></div></div>
       </div>
       <p class="fgl mb2">Scores</p>
-      ${dims.map(d=>{const score=resp.scores?.[d.id]||0;const rank=resp.ranks?.[d.id];const isTied=(resp.tiedTop||[]).includes(d.id);const mx=mxSc(qs,d.id);const pct=Math.min(100,Math.round((score/mx)*100));
+      ${dims.map(d=>{
+        const score=Number(scores[d.name]||0);
+        const rank=ranks[d.name];
+        const isTied=tiedTop.includes(d.id);
+        const mx=mxSc(qs,d.id);
+        const pct=mx>0?Math.min(100,Math.round((score/mx)*100)):0;
         return `<div style="padding:12px;border-radius:8px;margin-bottom:8px;border-left:4px solid ${esc(d.color||'#94a3b8')};background:var(--bg)">
-          <div class="fx ic jb mb2"><div class="fx ic g2"><div style="width:9px;height:9px;border-radius:50%;background:${esc(d.color||'#94a3b8')}"></div><strong>${esc(d.name)}</strong>${isTied?`<span class="bdg bbl">Top</span>`:''}</div><div class="fx g2 ic">${rank?`<span class="bdg bdft">${esc(rank.label)}</span>`:''}<span class="tm tsm">${score} pts</span></div></div>
+          <div class="fx ic jb mb2"><div class="fx ic g2"><div style="width:9px;height:9px;border-radius:50%;background:${esc(d.color||'#94a3b8')}"></div><strong>${esc(d.name)}</strong>${isTied?`<span class="bdg bbl">Top</span>`:''}</div><div class="fx g2 ic">${rank?`<span class="bdg bdft">${esc(rank.label||'')}</span>`:''}<span class="tm tsm">${score} pts</span></div></div>
           <div class="sbb"><div class="sbf" style="width:${pct}%;background:${esc(d.color||'#94a3b8')}"></div></div>
           ${rank?.recommendation?`<p class="tsm tm mt2"><strong>Rec:</strong> ${esc(rank.recommendation)}</p>`:''}
         </div>`;}).join('')}
