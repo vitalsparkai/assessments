@@ -246,7 +246,7 @@ function maxScore(dimId) {
 // ═══════════════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════════════
-const S = { step: 0, answers: {}, contact: {}, submitted: false };
+const S = { step: 0, answers: {}, contact: {}, submitted: false, shuffledOrders: {} };
 let _drag = null;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -274,6 +274,27 @@ const b = () => ({ ...DB, ...(ASM?.brand || {}) });
 const br = () => parseInt(b().btnRadius) || 8;
 const cr = () => parseInt(b().cardRadius) || 12;
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+// ═══════════════════════════════════════════════════════════════════
+// SHUFFLE
+function seededShuffle(arr, seed) {
+  const a = [...arr]; let s = seed;
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    const j = Math.abs(s) % (i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function getOpts(q) {
+  const opts = q.options || [];
+  if (!q.shuffle_options || !opts.length) return opts;
+  if (!S.shuffledOrders[q.id]) {
+    const seed = q.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) + Date.now() % 9999;
+    S.shuffledOrders[q.id] = seededShuffle(opts.map(o => o.id), seed);
+  }
+  return S.shuffledOrders[q.id].map(id => opts.find(o => o.id === id)).filter(Boolean);
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // RENDER
@@ -381,7 +402,7 @@ function rQ(q, brand) {
     return `<div class="qcard" style="${cs}">
       <h2>${esc(q.title)}</h2>
       <p class="qdesc">Select all that apply</p>
-      ${(q.options || []).map(opt => { const is = sel.includes(opt.id); return `
+      ${getOpts(q).map(opt => { const is = sel.includes(opt.id); return `
         <button class="opt-btn" onclick="togMulti('${q.id}','${opt.id}')"
           style="border-color:${is ? brand.primaryColor : brand.borderColor};background:${is ? brand.primaryColor+'18' : 'transparent'};color:${is ? brand.primaryColor : brand.textColor};border-radius:${Math.max(0,cardR-4)}px">
           <div class="opt-ck" style="border-color:${is ? brand.primaryColor : brand.borderColor+'88'};background:${is ? brand.primaryColor : 'transparent'}">
@@ -392,7 +413,7 @@ function rQ(q, brand) {
   }
 
   if (q.type === 'ranking') {
-    const opts = q.options || [];
+    const opts = getOpts(q);
     if (!Array.isArray(S.answers[q.id]) || S.answers[q.id].length !== opts.length)
       S.answers[q.id] = opts.map(o => o.id);
     const order = S.answers[q.id];
@@ -590,7 +611,7 @@ async function fireWebhook(asm, resp) {
 }
 
 function restart() {
-  S.step = 0; S.answers = {}; S.contact = {}; S.submitted = false;
+  S.step = 0; S.answers = {}; S.contact = {}; S.submitted = false; S.shuffledOrders = {};
   S._scores = null; S._ranks = null; S._tiedTop = null;
   render();
   window.scrollTo(0, 0);
