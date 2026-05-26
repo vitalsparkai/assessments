@@ -224,12 +224,12 @@ async function sbDel(table,id){
 }
 
 /* ── FIELD MAPPING: Builder (camelCase) ↔ Supabase (snake_case) ── */
-function asmToDb(a){return{id:a.id,tenant_id:_tenantId,title:a.title,description:a.description||'',status:a.status||'draft',brand:a.brand||{},webhook_url:a.webhookUrl||'',webhook_headers:a.webhookHeaders||'{"Content-Type":"application/json"}',show_results:a.showResults!==false,created_at:a.createdAt||now()};}
+function asmToDb(a){return{id:a.id,tenant_id:_tenantId,title:a.title,description:a.description||'',status:a.status||'draft',brand:a.brand||{},webhook_url:a.webhookUrl||'',webhook_headers:a.webhookHeaders||'{"Content-Type":"application/json"}',show_results:a.showResults!==false,allow_retakes:a.allowRetakes!==false,created_at:a.createdAt||now()};}
 function dbToAsm(r){return{id:r.id,title:r.title,description:r.description||'',status:r.status||'draft',brand:r.brand||{},webhookUrl:r.webhook_url||'',webhookHeaders:r.webhook_headers||'{"Content-Type":"application/json"}',showResults:r.show_results!==false,createdAt:r.created_at};}
 function qToDb(q,aId){return{id:q.id,assessment_id:aId||q.aId,section_id:q.sectionId||null,type:q.type,title:q.title||'',description:q.description||'',required:q.required!==false,order_index:q.orderIndex||0,position_weights:q.positionWeights||[],contact_fields:q.contactFields||[],options:q.options||[]};}
 function dbToQ(r){return{id:r.id,aId:r.assessment_id,sectionId:r.section_id,type:r.type,title:r.title||'',description:r.description||'',required:r.required!==false,orderIndex:r.order_index||0,positionWeights:r.position_weights||[],contactFields:r.contact_fields||[],options:r.options||[]};}
-function dimToDb(d,aId){return{id:d.id,assessment_id:aId||d.aId,name:d.name,description:d.description||'',color:d.color||'#3b82f6',order_index:d.orderIndex||0,ranges:d.ranges||[]};}
-function dbToDim(r){return{id:r.id,aId:r.assessment_id,name:r.name,description:r.description||'',color:r.color||'#3b82f6',orderIndex:r.order_index||0,ranges:r.ranges||[]};}
+function dimToDb(d,aId){return{id:d.id,assessment_id:aId||d.aId,name:d.name,description:d.description||'',color:d.color||'#3b82f6',order_index:d.orderIndex||0,ranges:d.ranges||[],show_in_results:d.showInResults!==false};}
+function dbToDim(r){return{id:r.id,aId:r.assessment_id,name:r.name,description:r.description||'',color:r.color||'#3b82f6',orderIndex:r.order_index||0,ranges:r.ranges||[],showInResults:r.show_in_results!==false};}
 function secToDb(s,aId){return{id:s.id,assessment_id:aId||s.aId,title:s.title,description:s.description||'',order_index:s.orderIndex||0,active_dim_ids:s.activeDimIds||[]};}
 function dbToSec(r){return{id:r.id,aId:r.assessment_id,title:r.title,description:r.description||'',orderIndex:r.order_index||0,activeDimIds:r.active_dim_ids||[]};}
 
@@ -347,7 +347,7 @@ function mkSample(){
        {id:uid(),text:'Systematically \u2014 leads flow on autopilot',scores:{'d-mkt':12,'d-ops':10,'d-lead':8}},
      ]},
   ];
-  return{assessments:[{id:AID,title:'Business Readiness Assessment',description:'Discover your strongest dimension across Marketing, Operations & Leadership',status:'published',brand:{...DB0},webhookUrl:'',webhookHeaders:'{"Content-Type":"application/json"}',showResults:true,createdAt:now()}],sections,questions:{[AID]:qs},dimensions:{[AID]:dims},responses:{[AID]:[]}};
+  return{assessments:[{id:AID,title:'Business Readiness Assessment',description:'Discover your strongest dimension across Marketing, Operations & Leadership',status:'published',brand:{...DB0},webhookUrl:'',webhookHeaders:'{"Content-Type":"application/json"}',showResults:true,allowRetakes:true,createdAt:now()}],sections,questions:{[AID]:qs},dimensions:{[AID]:dims},responses:{[AID]:[]}};
 }
 
 /* ══ HELPERS ══ */
@@ -558,6 +558,7 @@ function rGen(asm){return `<div class="card" style="max-width:600px">
   <div class="fg"><label>Description</label><textarea id="g-d" rows="3">${esc(asm.description)}</textarea></div>
   <div class="fg"><label>Status</label><select id="g-s"><option value="draft" ${asm.status==='draft'?'selected':''}>Draft</option><option value="published" ${asm.status==='published'?'selected':''}>Published</option></select></div>
   <label class="tw mb4"><input type="checkbox" id="g-sh" ${asm.showResults?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Show results page to respondents after submission</span></label>
+  <label class="tw mb4"><input type="checkbox" id="g-rt" ${asm.allowRetakes!==false?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Allow respondents to retake this assessment</span></label>
   <button class="btn bp" onclick="svGen()"><i class="ti ti-check"></i> Save Changes</button>
 </div>`;}
 
@@ -623,7 +624,15 @@ function rSc(){
   ${!dims.length?`<div class="empty"><i class="ti ti-chart-bar"></i><p>No dimensions yet.</p></div>`
   :dims.map(d=>`<div style="border-left:4px solid ${esc(d.color||'#94a3b8')};border-radius:10px;background:var(--surface);border:1px solid var(--border);padding:16px;margin-bottom:10px">
     <div class="fx ic jb mb3"><div class="fx ic g2"><div style="width:11px;height:11px;border-radius:50%;background:${esc(d.color||'#94a3b8')};flex-shrink:0"></div><strong>${esc(d.name)}</strong>${d.description?`<span class="tm tsm">${esc(d.description)}</span>`:''}</div>
-    <div class="fx g2"><button class="btn bs bsm" onclick="opDimMod('${d.id}')"><i class="ti ti-pencil"></i> Edit</button><button class="btn bd bsm" onclick="dlDim('${d.id}')"><i class="ti ti-trash"></i></button></div></div>
+    <div class="fx ic g2">
+      <label class="tw" title="Show this dimension on the results page" style="font-size:11px;gap:5px;white-space:nowrap">
+        <input type="checkbox" ${d.showInResults!==false?'checked':''} onchange="tgDimResults('${d.id}',this.checked)">
+        <div class="tt" style="width:28px;height:16px"><div class="tk" style="width:12px;height:12px"></div></div>
+        <span style="opacity:.6">In Results</span>
+      </label>
+      <button class="btn bs bsm" onclick="opDimMod('${d.id}')"><i class="ti ti-pencil"></i> Edit</button>
+      <button class="btn bd bsm" onclick="dlDim('${d.id}')"><i class="ti ti-trash"></i></button>
+    </div></div>
     <table><thead><tr><th>Range</th><th>Label</th><th>Description</th><th>Recommendation</th></tr></thead>
     <tbody>${(d.ranges||[]).sort((a,b)=>a.min-b.min).map(r=>`<tr><td><span class="bdg bdft">${r.min}\u2013${r.max}</span></td><td><strong>${esc(r.label)}</strong></td><td class="tm">${esc(r.description)}</td><td class="tm">${esc(r.recommendation)}</td></tr>`).join('')}</tbody></table>
   </div>`).join('')}</div>`;
@@ -698,7 +707,11 @@ function rRes(){
   const asm=gAsm();if(!asm)return`<div class="content"><p>Not found.</p></div>`;
   const rs=gRs();const dims=gDs();
   return `<div class="content">
-    <div class="ph"><div class="fx ic g3"><button class="btn bg bic" onclick="goTo('ed')"><i class="ti ti-arrow-left"></i></button><div><h1>${esc(asm.title)} \u2014 Results</h1><p class="tm tsm">${rs.length} submission${rs.length!==1?'s':''}</p></div></div>${asm.webhookUrl?`<button class="btn bs" onclick="rfAll()"><i class="ti ti-refresh"></i> Refire All</button>`:''}</div>
+    <div class="ph"><div class="fx ic g3"><button class="btn bg bic" onclick="goTo('ed')"><i class="ti ti-arrow-left"></i></button><div><h1>${esc(asm.title)} \u2014 Results</h1><p class="tm tsm">${rs.length} submission${rs.length!==1?'s':''}</p></div></div>
+    <div class="fx g2">
+      <button class="btn bs" onclick="rlRs()" title="Reload responses from Supabase"><i class="ti ti-refresh"></i> Refresh</button>
+      ${asm.webhookUrl?`<button class="btn bs" onclick="rfAll()"><i class="ti ti-reload"></i> Refire All</button>`:''}
+    </div></div>
     <div class="sgrid"><div class="scard"><div class="slbl">Total</div><div class="sval">${rs.length}</div></div><div class="scard"><div class="slbl">Webhook OK</div><div class="sval grn">${rs.filter(r=>r.webhookStatus==='success').length}</div></div><div class="scard"><div class="slbl">Webhook Err</div><div class="sval red">${rs.filter(r=>r.webhookStatus==='error').length}</div></div><div class="scard"><div class="slbl">Dimensions</div><div class="sval">${dims.length}</div></div></div>
     ${!rs.length?`<div class="empty"><i class="ti ti-users"></i><p>No responses yet.<br><button class="btn bp bsm mt3" onclick="prvAsm('${asm.id}')">Try it</button></p></div>`
     :`<div class="card" style="padding:0;overflow:hidden"><table><thead><tr><th>Submitted</th><th>Name</th><th>Email</th><th>Top Dimension</th><th>Webhook</th><th>Actions</th></tr></thead><tbody>
@@ -986,7 +999,7 @@ function rRMod(){
 }
 
 /* ══ ACTIONS ══ */
-function goTo(v){S.view=v;render();}
+function goTo(v,aId){if(aId)S.asmId=aId;S.view=v;render();if(v==='res'&&_session&&_tenantId)setTimeout(rlRs,150);}
 function stTab(t){S.tab=t;render();}
 function togSec(id){S.expandedSecs[id]=S.expandedSecs[id]===false?true:false;render();}
 
@@ -1003,7 +1016,7 @@ function vwRes(id){S.asmId=id;S.view='res';render();}
 function prvAsm(id){S.asmId=id;S.preview=true;S.step=0;S.answers={};S.contact={};S.shuffledOrders={};S.view='take';render();}
 async function dlAsm(id){if(!confirm('Delete this assessment and all responses?'))return;db.assessments=db.assessments.filter(a=>a.id!==id);delete db.questions[id];delete db.dimensions[id];if(db.sections)delete db.sections[id];delete db.responses[id];if(S.asmId===id){S.asmId=null;S.view='home';}sv();render();if(_session)sbDel('ab_assessments',id).catch(console.error);}
 function togSt(id){const a=db.assessments.find(a=>a.id===id);if(a){a.status=a.status==='published'?'draft':'published';sv();render();}}
-function svGen(){const a=db.assessments.find(a=>a.id===S.asmId);if(!a)return;a.title=document.getElementById('g-t').value;a.description=document.getElementById('g-d').value;a.status=document.getElementById('g-s').value;a.showResults=document.getElementById('g-sh').checked;sv();toast('Saved!');render();}
+function svGen(){const a=db.assessments.find(a=>a.id===S.asmId);if(!a)return;a.title=document.getElementById('g-t').value;a.description=document.getElementById('g-d').value;a.status=document.getElementById('g-s').value;a.showResults=document.getElementById('g-sh').checked;a.allowRetakes=document.getElementById('g-rt').checked;sv();toast('Saved!');render();}
 
 /* Sections */
 function opSecMod(secId){
@@ -1127,6 +1140,23 @@ function svWH(){const a=db.assessments.find(a=>a.id===S.asmId);if(!a)return;a.we
 async function tstWH(){const url=document.getElementById('wh-u')?.value;if(!url){toast('Enter a webhook URL first','err');return;}const r=await fireWH({...gAsm(),webhookUrl:url,webhookHeaders:document.getElementById('wh-h')?.value},{id:'test-'+uid(),contact:{},scores:{},ranks:{},tiedTop:[],createdAt:now()},gDs());toast(r.status==='success'?'Test sent \u2713':`Error: ${r.message||'HTTP '+r.code}`,r.status==='success'?'ok':'err');}
 async function rfOne(respId){const resp=(db.responses[S.asmId]||[]).find(r=>r.id===respId);const asm=gAsm();if(!resp||!asm)return;const btn=document.getElementById('rfb-'+respId);if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-refresh sp"></i>';}const result=await fireWH(asm,resp,gDs());resp.webhookStatus=result.status;resp.webhookFiredAt=now();sv();toast(result.status==='success'?'Webhook fired!':'Error','ok');render();}
 async function rfFromM(respId){await rfOne(respId);const resp=(db.responses[S.asmId]||[]).find(r=>r.id===respId);if(resp){S.modal={type:'r',data:resp};render();}}
+async function rlRs(){
+  // Live-reload responses from Supabase for the current assessment
+  const asm = gAsm(); if(!asm) return;
+  if(!_session || !_tenantId){ toast('Not connected to Supabase','err'); return; }
+  toast('Refreshing...');
+  try {
+    const rs = await sbGet('ab_responses', `assessment_id=eq.${asm.id}&order=created_at.desc&limit=500`);
+    if(!db.responses) db.responses = {};
+    db.responses[asm.id] = rs;
+    render();
+    toast(`${rs.length} response${rs.length!==1?'s':''} loaded`);
+  } catch(e) {
+    console.error(e);
+    toast('Failed to refresh: ' + e.message, 'err');
+  }
+}
+
 async function rfAll(){const rs=gRs();const asm=gAsm();if(!asm?.webhookUrl){toast('No webhook URL','err');return;}for(const r of rs){const res=await fireWH(asm,r,gDs());r.webhookStatus=res.status;r.webhookFiredAt=now();}sv();toast('All refired!');render();}
 function opRM(id){const r=(db.responses[S.asmId]||[]).find(r=>r.id===id);if(r){S.modal={type:'r',data:r};render();}}
 
@@ -1146,6 +1176,14 @@ function nxSt(){
     if(q.type==='contact_form'){(q.contactFields||[]).forEach(f=>{const el=document.getElementById('cf-'+f.id);if(el)S.contact[f.label]=el.value;});for(const f of(q.contactFields||[])){if(f.required&&!S.contact[f.label]){toast(`Please fill in "${f.label}"`,'err');return;}}}
   }else if(q.type==='contact_form')(q.contactFields||[]).forEach(f=>{const el=document.getElementById('cf-'+f.id);if(el)S.contact[f.label]=el.value;});
   if(S.step<qs.length-1){S.step++;render();window.scrollTo(0,0);}else sbmA();
+}
+function tgDimResults(dimId, show) {
+  const dims = gDs();
+  const d = dims.find(d => d.id === dimId);
+  if (!d) return;
+  d.showInResults = show;
+  sv();
+  render();
 }
 function sbmA(){
   const qs=orderedQs();const dims=gDs();const scores=calcScores(qs,dims,S.answers);const ranks=getRanks(dims,scores);const tiedTop=getTied(scores);
