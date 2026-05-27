@@ -237,10 +237,29 @@ function classifyAll(rawScores) {
 
   (SECS || []).forEach(sec => {
     const formula = sec.classification_formula || sec.classificationFormula || 'ranges';
-    if (formula === 'ranges') return; // static ranges handle it, no override needed
+    const fl = sec.formula_labels || sec.formulaLabels || {};
+    const secDimIds2 = sec.active_dim_ids || sec.activeDimIds || [];
+    const secDimsAll = DIMS.filter(d => secDimIds2.includes(d.id));
 
-    const secDimIds = sec.active_dim_ids || sec.activeDimIds || [];
-    const secDims = DIMS.filter(d => secDimIds.includes(d.id));
+    if (formula === 'ranges') {
+      // If formulaLabels.staticTiers defined, use them for label/desc/rec
+      const staticTiers = fl.staticTiers;
+      if (!staticTiers || !staticTiers.length) return; // fall back to dimension ranges
+      secDimsAll.forEach(d => {
+        const s = rawScores[d.id] || 0;
+        const ranges = (d.ranges || []).slice().sort((a,b) => a.min - b.min);
+        let rIdx = ranges.findIndex(r => s >= r.min && s <= r.max);
+        if (rIdx < 0) rIdx = s < (ranges[0]?.min||0) ? 0 : ranges.length - 1;
+        const tier = staticTiers[rIdx];
+        if (tier && tier.label) {
+          overrides[d.id] = { label: tier.label, description: tier.description||'', recommendation: tier.recommendation||'' };
+        }
+      });
+      return;
+    }
+
+    const secDimIds = secDimIds2;
+    const secDims = secDimsAll;
     if (!secDims.length) return;
 
     // ── PT Delta Formula ───────────────────────────────────────────
@@ -577,7 +596,7 @@ function rResults() {
           <p style="color:${esc(brand.textColor)}">Your personalized breakdown across each dimension.</p>
           ${tiedTop.length > 1 ? `<div style="margin-top:12px;padding:5px 16px;background:${esc(brand.primaryColor)}18;border-radius:20px;display:inline-block;font-size:12px;color:${esc(brand.primaryColor)};font-weight:700">Tied results across ${tiedTop.length} dimensions</div>` : ''}
         </div>
-        ${DIMS.filter(d => d.show_in_results !== false && !S._hiddenDims.has(d.id)).map(d => {
+        ${DIMS.filter(d => { const showIt = d.show_in_results !== false; const isSpectrum = d.name.startsWith('Spectrum — '); return (showIt && !isSpectrum) && !S._hiddenDims.has(d.id); }).map(d => {
           const score = scores?.[d.id] || 0; const mx = maxScore(d.id);
           const pct = Math.min(100, Math.round((score / mx) * 100));
           const rank = ranks?.[d.id]; const isTied = tiedTop.includes(d.id);
