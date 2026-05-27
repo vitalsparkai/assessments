@@ -981,20 +981,18 @@ function rDimMod(){
         <div class="fg" style="margin-bottom:0"><label>Color</label><div style="display:flex;align-items:center;gap:6px"><input type="color" id="dm-c" value="${esc(d.color||'#3b82f6')}"><div class="swr">${SW.map(c=>`<div class="sw ${d.color===c?'sl':''}" style="background:${c}" onclick="document.getElementById('dm-c').value='${c}'"></div>`).join('')}</div></div></div>
       </div>
       <div class="fg"><label>Description (optional)</label><input type="text" id="dm-d" value="${esc(d.description||'')}" placeholder="What this measures"></div>
-      <div class="fx ic jb mb2 mt2"><div><span class="fgl" style="display:inline">Score Ranges</span><p class="tm tsm mt1">Define what each score total means. Higher ranges accommodate ranking weight multipliers.</p></div><button class="btn bs bsm" onclick="addRng()"><i class="ti ti-plus"></i> Add Range</button></div>
+      <div class="fx ic jb mb2 mt2"><div><span class="fgl" style="display:inline">Score Ranges</span><p class="tm tsm mt1">Define score band boundaries (min/max). Labels &amp; recommendations are set in the <strong>Formulas</strong> tab.</p></div><button class="btn bs bsm" onclick="addRng()"><i class="ti ti-plus"></i> Add Range</button></div>
       <div id="rl">${(d.ranges||[]).sort((a,b)=>a.min-b.min).map((r,i)=>rRR(r,i)).join('')}${!(d.ranges||[]).length?'<p class="tm tsm">No ranges yet.</p>':''}</div>
     </div>
     <div class="mft"><button class="btn bs" onclick="clM()">Cancel</button><button class="btn bp" onclick="svDim()"><i class="ti ti-check"></i> Save Dimension</button></div>
   </div></div>`;
 }
 
-function rRR(r,i){return `<div class="rrow">
-  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Min</label><input type="number" value="${r.min||0}" onchange="updR(${i},'min',this.value)" style="text-align:center"></div>
-  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Max</label><input type="number" value="${r.max||10}" onchange="updR(${i},'max',this.value)" style="text-align:center"></div>
-  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Label</label><input type="text" value="${esc(r.label||'')}" onchange="updR(${i},'label',this.value)" placeholder="e.g. Emerging"></div>
-  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Description</label><input type="text" value="${esc(r.description||'')}" onchange="updR(${i},'description',this.value)" placeholder="What this means..."></div>
-  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Recommendation</label><input type="text" value="${esc(r.recommendation||'')}" onchange="updR(${i},'recommendation',this.value)" placeholder="Next step..."></div>
-  <button class="btn bd bic bsm" onclick="rmR(${i})" style="align-self:flex-end"><i class="ti ti-trash"></i></button>
+function rRR(r,i){return `<div class="rrow" style="grid-template-columns:90px 90px 1fr">
+  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Min Score</label><input type="number" value="${r.min||0}" onchange="updR(${i},'min',this.value)" style="text-align:center"></div>
+  <div class="fg" style="margin-bottom:0"><label style="font-size:10px">Max Score</label><input type="number" value="${r.max||10}" onchange="updR(${i},'max',this.value)" style="text-align:center"></div>
+  <div class="fx ic jb" style="padding-bottom:4px"><span class="tm tsm" style="font-size:11px">Tier ${i+1} — label &amp; description set in <strong>Formulas</strong> tab</span>
+  <button class="btn bd bic bsm" onclick="rmR(${i})"><i class="ti ti-trash"></i></button></div>
 </div>`;}
 
 /* ── RESPONSE MODAL ── */
@@ -1624,6 +1622,23 @@ function runTestScores() {
       });
     }
   });
+  // Apply static tiers from formulaLabels if defined
+  secs.forEach(function(sec){
+    var formula = sec.classificationFormula || 'ranges';
+    if (formula !== 'ranges') return;
+    var fl = sec.formulaLabels || {};
+    var staticTiers = fl.staticTiers;
+    if (!staticTiers || !staticTiers.length) return;
+    var secDims = dims.filter(function(d){ return (sec.activeDimIds||[]).includes(d.id); });
+    secDims.forEach(function(d){
+      var s = scores[d.id]||0;
+      var ranges = (d.ranges||[]).slice().sort(function(a,b){ return a.min-b.min; });
+      var rIdx = ranges.findIndex(function(r){ return s>=r.min&&s<=r.max; });
+      if (rIdx<0) rIdx = s<(ranges[0]&&ranges[0].min||0)?0:ranges.length-1;
+      var tier = staticTiers[rIdx];
+      if (tier&&tier.label) ranks[d.id]={label:tier.label,description:tier.description||'',recommendation:tier.recommendation||''};
+    });
+  });
   S._testResults = {scores:scores, ranks:ranks};
   render();
 }
@@ -1699,7 +1714,18 @@ function rFormulas() {
       html += '</div>';
       html += '</div>';
     } else {
-      html += '<p class="tm tsm" style="padding:8px 10px;background:var(--bg);border-radius:6px;border:1px solid var(--border)"><i class="ti ti-info-circle"></i> Labels come from each dimension\'s score ranges defined in the Dimensions tab.</p>';
+      var tiers = fl.staticTiers || [];
+      html += '<div class="tm tsm mb2" style="padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--border)"><i class="ti ti-info-circle"></i> Define a label, description, and recommendation for each score range tier. Tier 1 = lowest range, Tier N = highest, matching the order set in the Dimensions tab.</div>';
+      tiers.forEach(function(t, ti){
+        html += '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">';
+        html += '<div class="fx ic jb mb2"><span class="fgl" style="font-size:12px">Tier ' + (ti+1) + '</span>'
+          + '<button class="btn bd bic bsm" onclick="rmStaticTier(' + si + ',' + ti + ')"><i class="ti ti-trash"></i></button></div>';
+        html += '<div class="fg"><label style="font-size:10px">Label</label><input type="text" value="' + esc(t.label||'') + '" placeholder="e.g. Primary Motivator" onchange="updStaticTier(' + si + ',' + ti + ',\'label\',this.value)" style="font-weight:600"></div>';
+        html += '<div class="fg"><label style="font-size:10px">Description</label><input type="text" value="' + esc(t.description||'') + '" placeholder="Brief explanation shown in results" onchange="updStaticTier(' + si + ',' + ti + ',\'description\',this.value)"></div>';
+        html += '<div class="fg" style="margin-bottom:0"><label style="font-size:10px">Recommendation</label><input type="text" value="' + esc(t.recommendation||'') + '" placeholder="Next step or coaching insight" onchange="updStaticTier(' + si + ',' + ti + ',\'recommendation\',this.value)"></div>';
+        html += '</div>';
+      });
+      html += '<button class="btn bs bsm mt2" onclick="addStaticTier(' + si + ')"><i class="ti ti-plus"></i> Add Tier</button>';
     }
     html += '</div>';
   });
@@ -1713,6 +1739,28 @@ function updFL(secIdx, key, val) {
   if (!secs[secIdx]) return;
   if (!secs[secIdx].formulaLabels) secs[secIdx].formulaLabels = {};
   secs[secIdx].formulaLabels[key] = val;
+}
+
+function addStaticTier(secIdx) {
+  var secs = gSecs();
+  if (!secs[secIdx]) return;
+  if (!secs[secIdx].formulaLabels) secs[secIdx].formulaLabels = {};
+  if (!secs[secIdx].formulaLabels.staticTiers) secs[secIdx].formulaLabels.staticTiers = [];
+  secs[secIdx].formulaLabels.staticTiers.push({label:'', description:'', recommendation:''});
+  render();
+}
+
+function rmStaticTier(secIdx, tierIdx) {
+  var secs = gSecs();
+  if (!secs[secIdx]?.formulaLabels?.staticTiers) return;
+  secs[secIdx].formulaLabels.staticTiers.splice(tierIdx, 1);
+  render();
+}
+
+function updStaticTier(secIdx, tierIdx, key, val) {
+  var secs = gSecs();
+  if (!secs[secIdx]?.formulaLabels?.staticTiers?.[tierIdx]) return;
+  secs[secIdx].formulaLabels.staticTiers[tierIdx][key] = val;
 }
 
 function updSecFormula(secIdx, val) {
