@@ -549,6 +549,8 @@ function rEd(){
       <div class="tab ${S.tab==='gen'?'on':''}" onclick="stTab('gen')"><i class="ti ti-settings"></i> General</div>
       <div class="tab ${S.tab==='qs'?'on':''}" onclick="stTab('qs')"><i class="ti ti-layout-rows"></i> Sections & Questions</div>
       <div class="tab ${S.tab==='sc'?'on':''}" onclick="stTab('sc')"><i class="ti ti-chart-bar"></i> Dimensions</div>
+      <div class="tab ${S.tab==='fml'?'on':''}" onclick="stTab('fml')"><i class="ti ti-function"></i> Formulas</div>
+      <div class="tab ${S.tab==='tst'?'on':''}" onclick="stTab('tst')"><i class="ti ti-test-pipe"></i> Test</div>
       <div class="tab ${S.tab==='br'?'on':''}" onclick="stTab('br')"><i class="ti ti-palette"></i> Brand</div>
       <div class="tab ${S.tab==='wh'?'on':''}" onclick="stTab('wh')"><i class="ti ti-webhook"></i> Webhook</div>
       <div class="tab ${S.tab==='embed'?'on':''}" onclick="stTab('embed')"><i class="ti ti-share"></i> Share & Embed</div>
@@ -556,7 +558,7 @@ function rEd(){
       <div class="tab ${S.tab==='test'?'on':''}" onclick="stTab('test')"><i class="ti ti-test-pipe"></i> Test Scores</div>
 
     </div>
-    ${S.tab==='gen'?rGen(asm):S.tab==='qs'?rQsTab():S.tab==='sc'?rSc():S.tab==='br'?rBr(asm):S.tab==='embed'?rEmbed(asm):S.tab==='io'?rIO(asm):S.tab==='test'?rTest(asm):rWH(asm)}
+    ${S.tab==='gen'?rGen(asm):S.tab==='qs'?rQsTab():S.tab==='sc'?rSc():S.tab==='fml'?rFormulas():S.tab==='tst'?rTest(asm):S.tab==='br'?rBr(asm):S.tab==='embed'?rEmbed(asm):S.tab==='io'?rIO(asm):rWH(asm)}
   </div>`;
 }
 
@@ -1527,74 +1529,79 @@ function rIO(asm){
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// TEST SCORES TAB
-// Manually enter scores per dimension and preview the classification
+// TEST TAB — manual score entry → classification preview
 // ═══════════════════════════════════════════════════════════════════
 function rTest(asm) {
-  const dims    = gDs().filter(d => !d.name.startsWith('Spectrum — '));
-  const secs    = gSecs();
-  if (!dims.length) return `<div class="card"><p class="tm tsm">Add dimensions first.</p></div>`;
-
-  // Init test state
+  const dims = gDs().filter(d => !d.name.startsWith('Spectrum — '));
+  const secs = gSecs();
+  if (!dims.length) return `<div class="card"><p class="tm">Add dimensions first.</p></div>`;
   if (!S._test) S._test = {};
-  if (!S._testResults) S._testResults = null;
 
-  const scoreInputs = dims.map(d => `
-    <div style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div class="fx ic g2">
-        <div style="width:10px;height:10px;border-radius:50%;background:${esc(d.color||'#94a3b8')};flex-shrink:0"></div>
-        <span style="font-size:13px;font-weight:500">${esc(d.name)}</span>
-        <span class="tm tsm">(${esc(secs.find(s=>(s.activeDimIds||[]).includes(d.id))?.title||'—')})</span>
-      </div>
-      <input type="number" id="ts-${esc(d.id)}" value="${S._test[d.id]||0}" min="0" max="9999"
-        onchange="S._test['${esc(d.id)}']=Number(this.value)"
-        style="width:90px;text-align:center;font-size:16px;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:6px 8px">
+  // Group dims by section
+  const secGroups = secs.map(sec => ({
+    sec,
+    dims: dims.filter(d => (sec.activeDimIds||[]).includes(d.id))
+  })).filter(g => g.dims.length);
+
+  const inputs = secGroups.map(({sec, dims:sdims}) => `
+    <div style="margin-bottom:20px">
+      <div class="fgl mb2" style="font-size:12px;text-transform:uppercase;letter-spacing:.05em">${esc(sec.title)}</div>
+      ${sdims.map(d => {
+        const val = S._test[d.id] ?? '';
+        return `<div style="display:grid;grid-template-columns:1fr 110px;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div class="fx ic g2">
+            <div style="width:9px;height:9px;border-radius:50%;background:${esc(d.color||'#94a3b8')};flex-shrink:0"></div>
+            <span style="font-size:13px;font-weight:500">${esc(d.name)}</span>
+          </div>
+          <input type="number" id="ts-${esc(d.id)}" value="${val}" min="0" max="9999" placeholder="score"
+            style="text-align:center;font-size:15px;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:6px 8px;width:100%">
+        </div>`;
+      }).join('')}
     </div>`).join('');
 
   const resultHtml = S._testResults ? (() => {
-    const { scores, ranks } = S._testResults;
-    return `<div style="margin-top:16px">
-      <div class="fgl mb3">Classification Results</div>
-      ${dims.map(d => {
-        const score = scores[d.id] || 0;
-        const rank  = ranks[d.id];
-        const label = rank?.label;
-        if (!label || label === 'N/A') return '';
-        const mx = Math.max(...Object.values(scores).filter(Boolean)) || 1;
-        const pct = Math.min(100, Math.round((score / mx) * 100));
-        return `<div style="padding:12px;border-radius:8px;margin-bottom:8px;border-left:4px solid ${esc(d.color||'#94a3b8')};background:var(--bg)">
-          <div class="fx ic jb mb2">
-            <div class="fx ic g2">
-              <div style="width:9px;height:9px;border-radius:50%;background:${esc(d.color||'#94a3b8')}"></div>
-              <strong style="font-size:13px">${esc(d.name)}</strong>
-            </div>
-            <div class="fx g2 ic">
-              <span class="bdg ${label==='Primary Type'||label==='Primary'?'bbl':label.includes('Highly')?'bdft':label.includes('Secondary')?'bpur':'bdft'}">${esc(label)}</span>
-              <span class="tm tsm">${score} pts</span>
-            </div>
-          </div>
-          <div class="sbb"><div class="sbf" style="width:${pct}%;background:${esc(d.color||'#94a3b8')}"></div></div>
-          ${rank?.recommendation?`<p class="tsm tm mt2">${esc(rank.recommendation)}</p>`:''}
+    const {scores,ranks} = S._testResults;
+    const classified = dims.filter(d => ranks[d.id]?.label && ranks[d.id].label !== 'N/A');
+    if (!classified.length) return `<div class="card" style="margin-top:16px"><p class="tm tsm">No dimensions met classification threshold with these scores.</p></div>`;
+    const maxScore = Math.max(...Object.values(scores).filter(Boolean), 1);
+    return `<div class="card" style="margin-top:16px;padding-top:16px">
+      <div class="fgl mb3">Classification Preview</div>
+      ${secGroups.map(({sec, dims:sdims}) => {
+        const secClassified = sdims.filter(d => ranks[d.id]?.label && ranks[d.id].label !== 'N/A');
+        if (!secClassified.length) return '';
+        return `<div style="margin-bottom:16px">
+          <div class="tm tsm mb2" style="font-size:11px;text-transform:uppercase;letter-spacing:.05em">${esc(sec.title)} <span style="opacity:.5">${esc(sec.classificationFormula||'ranges')}</span></div>
+          ${secClassified.map(d => {
+            const score = scores[d.id]||0;
+            const rank  = ranks[d.id];
+            const pct   = Math.min(100,Math.round((score/maxScore)*100));
+            const badgeCol = rank.label.toLowerCase().includes('primary')||rank.label==='Personality Type'?'bbl':rank.label.toLowerCase().includes('highly')||rank.label.toLowerCase().includes('high')?'bdft':'bpur';
+            return `<div style="padding:12px;border-radius:8px;margin-bottom:8px;border-left:4px solid ${esc(d.color||'#94a3b8')};background:var(--bg)">
+              <div class="fx ic jb mb2">
+                <div class="fx ic g2"><div style="width:9px;height:9px;border-radius:50%;background:${esc(d.color||'#94a3b8')}"></div><strong style="font-size:13px">${esc(d.name)}</strong></div>
+                <div class="fx g2 ic"><span class="bdg ${badgeCol}">${esc(rank.label)}</span><span class="tm tsm">${score} pts</span></div>
+              </div>
+              <div class="sbb"><div class="sbf" style="width:${pct}%;background:${esc(d.color||'#94a3b8')}"></div></div>
+              ${rank.recommendation?`<p class="tsm tm mt2">${esc(rank.recommendation)}</p>`:''}
+            </div>`;
+          }).join('')}
         </div>`;
-      }).filter(Boolean).join('')}
-      ${dims.every(d => !ranks[d.id]?.label || ranks[d.id]?.label === 'N/A') ?
-        '<p class="tm tsm">No classifications met threshold. Try higher scores.</p>' : ''}
+      }).join('')}
     </div>`;
   })() : '';
 
-  return `<div class="card">
-    <div class="fx ic jb mb3">
+  return `<div class="content">
+    <div class="ph" style="margin-bottom:16px">
       <div>
-        <div class="fgl">Test Score Simulator</div>
-        <p class="tm tsm mt1">Enter raw dimension scores and see how the classification formulas label them.</p>
+        <h2>Test Score Simulator</h2>
+        <p class="tm tsm mt1">Enter raw dimension scores manually and preview exactly how formulas will classify them.</p>
       </div>
-      <button class="btn bp" onclick="runTestScores()"><i class="ti ti-player-play"></i> Run Classification</button>
+      <div class="fx g2">
+        <button class="btn bs" onclick="fillTestZero()"><i class="ti ti-eraser"></i> Clear</button>
+        <button class="btn bp" onclick="runTestScores()"><i class="ti ti-player-play"></i> Run</button>
+      </div>
     </div>
-    <div class="fx g2 mb3" style="flex-wrap:wrap">
-      <button class="btn bs bsm" onclick="fillTestRandom()"><i class="ti ti-dice"></i> Random Scores</button>
-      <button class="btn bs bsm" onclick="fillTestZero()"><i class="ti ti-eraser"></i> Clear</button>
-    </div>
-    <div>${scoreInputs}</div>
+    <div class="card" style="max-width:560px">${inputs}</div>
     ${resultHtml}
   </div>`;
 }
@@ -1602,16 +1609,15 @@ function rTest(asm) {
 function runTestScores() {
   const dims = gDs().filter(d => !d.name.startsWith('Spectrum — '));
   const secs = gSecs();
-  // Build scores from input values
   const scores = {};
   dims.forEach(d => {
     const el = document.getElementById('ts-' + d.id);
-    scores[d.id] = el ? Number(el.value) : (S._test[d.id] || 0);
-    S._test[d.id] = scores[d.id];
+    const val = el ? Number(el.value)||0 : (S._test[d.id]||0);
+    scores[d.id] = val;
+    S._test[d.id] = val;
   });
-  // Static ranks
   const ranks = getRanks(dims, scores);
-  // Dynamic formula overrides — same logic as player
+  // Apply formula overrides
   secs.forEach(sec => {
     const formula = sec.classificationFormula || 'ranges';
     const fl = sec.formulaLabels || {};
@@ -1620,73 +1626,181 @@ function runTestScores() {
     if (formula === 'pt_delta') {
       const PT_MAX = {'Adventurer':28};
       const pcts = {};
-      secDims.forEach(d => { pcts[d.id] = (scores[d.id]||0) / (PT_MAX[d.name]||32) * 100; });
+      secDims.forEach(d => { pcts[d.id] = (scores[d.id]||0)/(PT_MAX[d.name]||32)*100; });
       const maxPct = Math.max(...Object.values(pcts));
-      const delta  = fl.delta1 ?? 1.5;
-      const thr2   = fl.delta2 ?? 65;
-      const thr3   = fl.delta3 ?? 37;
       secDims.forEach(d => {
         const pct = pcts[d.id];
-        let label = null, desc = '', rec = '';
-        if (pct >= maxPct - delta) {
-          label = fl.tier1 || 'Personality Type';
-          desc  = 'Core expression of who you are';
-          rec   = 'Own this type fully — it is your natural strength and signature.';
-        } else if (pct >= thr2) {
-          label = fl.tier2 || 'Highly Impacting Type';
-          desc  = 'Significantly shapes your behavior and decisions';
-          rec   = 'Lean into this type in contexts where it is an asset.';
-        } else if (pct >= thr3) {
-          label = fl.tier3 || 'Secondary Type';
-          desc  = 'A background influence on how you show up';
-          rec   = 'Notice when this type activates.';
-        }
-        if (label) ranks[d.id] = { label, description: desc, recommendation: rec };
-        else ranks[d.id] = { label: 'N/A', description: '', recommendation: '' };
+        const delta = fl.delta1 ?? 1.5; const t2 = fl.delta2 ?? 65; const t3 = fl.delta3 ?? 37;
+        let label=null, desc='', rec='';
+        if (pct >= maxPct - delta)      { label=fl.tier1||'Personality Type'; desc='Core expression of who you are'; rec='Own this type fully.'; }
+        else if (pct >= t2)             { label=fl.tier2||'Highly Impacting Type'; desc='Significantly shapes behavior'; rec='Lean into this type where it serves you.'; }
+        else if (pct >= t3)             { label=fl.tier3||'Secondary Type'; desc='Background influence'; rec='Notice when this activates.'; }
+        ranks[d.id] = label ? {label,description:desc,recommendation:rec} : {label:'N/A',description:'',recommendation:''};
       });
     } else if (formula === 'relative_max') {
-      const rawSec = {};
-      secDims.forEach(d => { rawSec[d.id] = scores[d.id] || 0; });
-      const maxRaw = Math.max(...Object.values(rawSec));
-      const delta = fl.delta1 ?? 4;
-      const floor = (fl.delta2 ?? 40) / 100;
-      const sig = maxRaw * floor;
-      const belowMax = Object.values(rawSec).filter(v => v < maxRaw && v > sig);
-      const secondMax = belowMax.length ? Math.max(...belowMax) : -1;
+      const raw = {}; secDims.forEach(d => { raw[d.id]=scores[d.id]||0; });
+      const mx = Math.max(...Object.values(raw));
+      const delta = fl.delta1 ?? 4; const floor = (fl.delta2 ?? 40)/100;
+      const sig = mx * floor;
+      const belowMx = Object.values(raw).filter(v => v < mx && v > sig);
+      const secMax = belowMx.length ? Math.max(...belowMx) : -1;
       secDims.forEach(d => {
-        const s = rawSec[d.id];
-        let label = null;
-        if (s >= maxRaw - delta) label = fl.tier1 || 'Primary';
-        else if (secondMax > -1 && s >= secondMax - delta && s < maxRaw - delta) label = fl.tier2 || 'Secondary';
-        if (label) ranks[d.id] = { label, description: label + ' ' + d.name + ' expression', recommendation: label === (fl.tier1||'Primary') ? 'This is your dominant pattern.' : 'This secondary pattern activates in certain situations.' };
-        else ranks[d.id] = { label: 'N/A', description: '', recommendation: '' };
+        const s = raw[d.id]; let label=null;
+        if (s >= mx - delta) label = fl.tier1||'Primary';
+        else if (secMax>-1 && s >= secMax-delta && s < mx-delta) label = fl.tier2||'Secondary';
+        ranks[d.id] = label ? {label, description:label+' '+d.name+' expression', recommendation:label===(fl.tier1||'Primary')?'Your dominant pattern.':'Secondary pattern — notice when it activates.'} : {label:'N/A',description:'',recommendation:''};
       });
     }
   });
-  S._testResults = { scores, ranks };
+  S._testResults = {scores, ranks};
   render();
-}
-
-function fillTestRandom() {
-  const dims = gDs().filter(d => !d.name.startsWith('Spectrum — '));
-  dims.forEach(d => {
-    S._test[d.id] = Math.floor(Math.random() * 30) + 5;
-    const el = document.getElementById('ts-' + d.id);
-    if (el) el.value = S._test[d.id];
-  });
-  runTestScores();
 }
 
 function fillTestZero() {
   const dims = gDs().filter(d => !d.name.startsWith('Spectrum — '));
-  dims.forEach(d => {
-    S._test[d.id] = 0;
-    const el = document.getElementById('ts-' + d.id);
-    if (el) el.value = 0;
-  });
+  dims.forEach(d => { S._test[d.id]=0; });
   S._testResults = null;
   render();
 }
+// ═══════════════════════════════════════════════════════════════════
+// FORMULAS TAB — configure classification formulas per section
+// ═══════════════════════════════════════════════════════════════════
+function rFormulas() {
+  const secs = gSecs();
+  if (!secs.length) return `<div class="content"><div class="card"><p class="tm">Add sections first in the Sections & Questions tab.</p></div></div>`;
+
+  const rows = secs.map((sec, si) => {
+    const cf  = sec.classificationFormula || 'ranges';
+    const fl  = sec.formulaLabels || {};
+
+    const tierRows = cf === 'pt_delta' ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border);border-radius:8px;overflow:hidden;margin-top:10px">
+        <div style="background:var(--surface);padding:10px">
+          <div class="tm tsm mb1" style="font-size:10px;text-transform:uppercase">Tier 1 — Top (within ±delta of max)</div>
+          <input type="text" value="${esc(fl.tier1||'Personality Type')}" placeholder="Personality Type"
+            onchange="updFL(${si},'tier1',this.value)"
+            style="width:100%;margin-bottom:6px;font-weight:600;border:none;border-bottom:1px solid var(--border);background:transparent;padding:2px 0">
+          <div class="fx g1 ic">
+            <span class="tm tsm">± </span>
+            <input type="number" value="${fl.delta1??1.5}" step="0.5" min="0" max="20"
+              onchange="updFL(${si},'delta1',Number(this.value))"
+              style="width:55px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px">
+            <span class="tm tsm">pct pts</span>
+          </div>
+        </div>
+        <div style="background:var(--surface);padding:10px">
+          <div class="tm tsm mb1" style="font-size:10px;text-transform:uppercase">Tier 2 — Highly Impacting</div>
+          <input type="text" value="${esc(fl.tier2||'Highly Impacting Type')}" placeholder="Highly Impacting Type"
+            onchange="updFL(${si},'tier2',this.value)"
+            style="width:100%;margin-bottom:6px;font-weight:600;border:none;border-bottom:1px solid var(--border);background:transparent;padding:2px 0">
+          <div class="fx g1 ic">
+            <span class="tm tsm">≥ </span>
+            <input type="number" value="${fl.delta2??65}" min="0" max="100"
+              onchange="updFL(${si},'delta2',Number(this.value))"
+              style="width:55px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px">
+            <span class="tm tsm">%</span>
+          </div>
+        </div>
+        <div style="background:var(--surface);padding:10px">
+          <div class="tm tsm mb1" style="font-size:10px;text-transform:uppercase">Tier 3 — Secondary</div>
+          <input type="text" value="${esc(fl.tier3||'Secondary Type')}" placeholder="Secondary Type"
+            onchange="updFL(${si},'tier3',this.value)"
+            style="width:100%;margin-bottom:6px;font-weight:600;border:none;border-bottom:1px solid var(--border);background:transparent;padding:2px 0">
+          <div class="fx g1 ic">
+            <span class="tm tsm">≥ </span>
+            <input type="number" value="${fl.delta3??37}" min="0" max="100"
+              onchange="updFL(${si},'delta3',Number(this.value))"
+              style="width:55px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px">
+            <span class="tm tsm">%</span>
+          </div>
+        </div>
+      </div>` : cf === 'relative_max' ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border-radius:8px;overflow:hidden;margin-top:10px">
+        <div style="background:var(--surface);padding:10px">
+          <div class="tm tsm mb1" style="font-size:10px;text-transform:uppercase">Tier 1 — Primary (within ±delta of max)</div>
+          <input type="text" value="${esc(fl.tier1||'Primary')}" placeholder="Primary"
+            onchange="updFL(${si},'tier1',this.value)"
+            style="width:100%;margin-bottom:6px;font-weight:600;border:none;border-bottom:1px solid var(--border);background:transparent;padding:2px 0">
+          <div class="fx g1 ic">
+            <span class="tm tsm">± </span>
+            <input type="number" value="${fl.delta1??4}" min="0" max="50"
+              onchange="updFL(${si},'delta1',Number(this.value))"
+              style="width:55px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px">
+            <span class="tm tsm">pts</span>
+          </div>
+        </div>
+        <div style="background:var(--surface);padding:10px">
+          <div class="tm tsm mb1" style="font-size:10px;text-transform:uppercase">Tier 2 — Secondary</div>
+          <input type="text" value="${esc(fl.tier2||'Secondary')}" placeholder="Secondary"
+            onchange="updFL(${si},'tier2',this.value)"
+            style="width:100%;margin-bottom:6px;font-weight:600;border:none;border-bottom:1px solid var(--border);background:transparent;padding:2px 0">
+          <div class="fx g1 ic">
+            <span class="tm tsm">Floor: </span>
+            <input type="number" value="${fl.delta2??40}" min="0" max="100"
+              onchange="updFL(${si},'delta2',Number(this.value))"
+              style="width:55px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px">
+            <span class="tm tsm">% of max</span>
+          </div>
+        </div>
+      </div>` : `
+      <div class="tm tsm mt2" style="padding:8px 10px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">
+        <i class="ti ti-info-circle"></i> Labels come from each dimension's score ranges defined in the Dimensions tab.
+      </div>`;
+
+    return `<div class="card" style="margin-bottom:12px">
+      <div class="fx ic jb mb2">
+        <div>
+          <strong>${esc(sec.title)}</strong>
+          <span class="bdg ${cf==='pt_delta'?'bbl':cf==='relative_max'?'bpur':'bdft'} ml2">${cf==='pt_delta'?'PT Delta':cf==='relative_max'?'Relative Max':'Static Ranges'}</span>
+        </div>
+        <select onchange="updSecFormula(${si},this.value)" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px">
+          <option value="ranges" ${cf==='ranges'?'selected':''}>Static Ranges</option>
+          <option value="pt_delta" ${cf==='pt_delta'?'selected':''}>PT Delta</option>
+          <option value="relative_max" ${cf==='relative_max'?'selected':''}>Relative Max</option>
+        </select>
+      </div>
+      ${tierRows}
+    </div>`;
+  }).join('');
+
+  return `<div class="content">
+    <div class="ph" style="margin-bottom:16px">
+      <div><h2>Formulas</h2><p class="tm tsm mt1">Define how scores are classified into outcome labels for each section.</p></div>
+      <button class="btn bp" onclick="svAllFormulas()"><i class="ti ti-check"></i> Save All</button>
+    </div>
+    ${rows}
+  </div>`;
+}
+
+function updFL(secIdx, key, val) {
+  const secs = gSecs();
+  if (!secs[secIdx]) return;
+  if (!secs[secIdx].formulaLabels) secs[secIdx].formulaLabels = {};
+  secs[secIdx].formulaLabels[key] = val;
+}
+
+function updSecFormula(secIdx, val) {
+  const secs = gSecs();
+  if (!secs[secIdx]) return;
+  secs[secIdx].classificationFormula = val;
+  render();
+}
+
+function svAllFormulas() {
+  const secs = gSecs();
+  const aId = S.asmId;
+  if (!aId) return;
+  // Save each section back to db and Supabase
+  const saves = secs.map(sec => {
+    if (!db.sections[aId]) db.sections[aId] = [];
+    const i = db.sections[aId].findIndex(s => s.id === sec.id);
+    if (i >= 0) db.sections[aId][i] = sec;
+    return sbUpsert('ab_sections', DB.secToDb(sec, aId));
+  });
+  Promise.all(saves).then(() => toast('Formulas saved!')).catch(e => toast('Save error: ' + e.message, 'err'));
+}
+
+
 
 
 /* ══ CSV PARSER ══ */
