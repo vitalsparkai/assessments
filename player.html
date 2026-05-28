@@ -231,6 +231,37 @@ function getTied(scores) {
 const PT_MAX_SCORES = { 'Adventurer': 28 };
 const PT_DEFAULT_MAX = 32;
 
+function evalFormula(formula, dimId, rawScores, dims) {
+  if (!formula || !formula.trim()) return false;
+  var expr = formula.trim();
+  var selfScore = rawScores[dimId] || 0;
+  dims.forEach(function(d) {
+    var re = new RegExp('<' + d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '>', 'gi');
+    expr = expr.replace(re, String(rawScores[d.id] || 0));
+  });
+  expr = expr.replace(/<self>/gi, String(selfScore));
+  var dimObj = dims.find(function(d){ return d.id===dimId; });
+  var dimMax = dimObj && dimObj.ranges && dimObj.ranges.length
+    ? Math.max.apply(null, dimObj.ranges.map(function(r){ return r.max||0; })) : 100;
+  expr = expr.replace(/Pct\(([^)]+)\)/gi, function(_, inner) {
+    return '(' + inner + '/' + dimMax + '*100)';
+  });
+  expr = expr.replace(/\bMax\(/gi, 'Math.max(')
+             .replace(/\bMin\(/gi, 'Math.min(')
+             .replace(/\bAvg\(/gi, '__avg(')
+             .replace(/\bSum\(/gi, '__sum(')
+             .replace(/\bAbs\(/gi, 'Math.abs(');
+  if (/^\s*[><!=]/.test(expr)) expr = selfScore + ' ' + expr;
+  expr = expr.replace(/([^><!=])=([^>=])/g, '$1==$2');
+  try {
+    var fn = new Function('__avg','__sum','return (' + expr + ')');
+    return Boolean(fn(
+      function() { var a=Array.from(arguments); return a.reduce(function(s,v){return s+v;},0)/a.length; },
+      function() { var a=Array.from(arguments); return a.reduce(function(s,v){return s+v;},0); }
+    ));
+  } catch(e) { return false; }
+}
+
 function classifyAll(rawScores) {
   const overrides = {};
   if (!S._hiddenDims) S._hiddenDims = new Set();
@@ -241,10 +272,27 @@ function classifyAll(rawScores) {
     const secDimIds2 = sec.active_dim_ids || sec.activeDimIds || [];
     const secDimsAll = DIMS.filter(d => secDimIds2.includes(d.id));
 
+    // formulaTiers takes priority — user-written expressions
+    const formulaTiers = fl.formulaTiers;
+    if (formulaTiers && formulaTiers.length) {
+      // Evaluate tiers in order; first match wins per dimension
+      const matched = new Set();
+      formulaTiers.forEach(tier => {
+        if (!tier.formula || !tier.label) return;
+        secDimsAll.forEach(d => {
+          if (matched.has(d.id)) return; // already classified by higher-priority tier
+          if (evalFormula(tier.formula, d.id, rawScores, secDimsAll)) {
+            overrides[d.id] = { label: tier.label, description: tier.description||'', recommendation: tier.recommendation||'' };
+            matched.add(d.id);
+          }
+        });
+      });
+      return;
+    }
+
     if (formula === 'ranges') {
-      // If formulaLabels.staticTiers defined, use them for label/desc/rec
       const staticTiers = fl.staticTiers;
-      if (!staticTiers || !staticTiers.length) return; // fall back to dimension ranges
+      if (!staticTiers || !staticTiers.length) return;
       secDimsAll.forEach(d => {
         const s = rawScores[d.id] || 0;
         const ranges = (d.ranges || []).slice().sort((a,b) => a.min - b.min);
