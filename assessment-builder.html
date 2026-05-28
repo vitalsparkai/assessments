@@ -1622,6 +1622,25 @@ function runTestScores() {
       });
     }
   });
+  // Apply formulaTiers (user-written expressions) — highest priority
+  secs.forEach(function(sec){
+    var fl = sec.formulaLabels || {};
+    var formulaTiers = fl.formulaTiers;
+    if (!formulaTiers || !formulaTiers.length) return;
+    var secDims = dims.filter(function(d){ return (sec.activeDimIds||[]).includes(d.id); });
+    var matched = {};
+    formulaTiers.forEach(function(tier){
+      if (!tier.formula || !tier.label) return;
+      secDims.forEach(function(d){
+        if (matched[d.id]) return;
+        if (evalFormula(tier.formula, d.id, scores, secDims)) {
+          ranks[d.id] = {label:tier.label, description:tier.description||'', recommendation:tier.recommendation||''};
+          matched[d.id] = true;
+        }
+      });
+    });
+  });
+
   // Apply static tiers from formulaLabels if defined
   secs.forEach(function(sec){
     var formula = sec.classificationFormula || 'ranges';
@@ -1651,82 +1670,153 @@ function fillTestZero() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// FORMULA ENGINE
+// Evaluates user-written expressions per dimension
+// Variables: <DimName> = raw score, <self> = current dim score
+// Functions: Max(...), Min(...), Avg(...), Sum(...), Pct(<DimName>)
+// Operators: >, <, >=, <=, =, +, -, *, /
+// If formula starts with operator, <self> is prepended automatically
+// ═══════════════════════════════════════════════════════════════════
+function evalFormula(formula, dimId, scores, dims) {
+  if (!formula || !formula.trim()) return false;
+  var expr = formula.trim();
+  var selfScore = scores[dimId] || 0;
+
+  // Build score lookup by name
+  var byName = {};
+  dims.forEach(function(d) { byName[d.name] = scores[d.id] || 0; });
+
+  // Replace <DimName> references (case-insensitive)
+  dims.forEach(function(d) {
+    var re = new RegExp('<' + d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '>', 'gi');
+    expr = expr.replace(re, String(scores[d.id] || 0));
+  });
+  expr = expr.replace(/<self>/gi, String(selfScore));
+
+  // Pct(<val>) = val / maxPossible * 100  — uses the dim's max range as max
+  var dimObj = dims.find(function(d){ return d.id===dimId; });
+  var dimMax = dimObj && dimObj.ranges && dimObj.ranges.length
+    ? Math.max.apply(null, dimObj.ranges.map(function(r){ return r.max||0; }))
+    : 100;
+  expr = expr.replace(/Pct\(([^)]+)\)/gi, function(_, inner) {
+    return '(' + inner + '/' + dimMax + '*100)';
+  });
+
+  // Map functions
+  expr = expr.replace(/\bMax\(/gi, 'Math.max(');
+  expr = expr.replace(/\bMin\(/gi, 'Math.min(');
+  expr = expr.replace(/\bAvg\(/gi, '__avg(');
+  expr = expr.replace(/\bSum\(/gi, '__sum(');
+  expr = expr.replace(/\bAbs\(/gi, 'Math.abs(');
+
+  // Implicit <self>: if expr starts with comparison operator, prepend self score
+  if (/^\s*[><!=]/.test(expr)) {
+    expr = selfScore + ' ' + expr;
+  }
+
+  // = not preceded by > < ! = → convert to ==
+  expr = expr.replace(/([^><!=])=([^>=])/g, '$1==$2');
+
+  try {
+    var fn = new Function('__avg','__sum','return (' + expr + ')');
+    var result = fn(
+      function() { var a=Array.from(arguments); return a.reduce(function(s,v){return s+v;},0)/a.length; },
+      function() { var a=Array.from(arguments); return a.reduce(function(s,v){return s+v;},0); }
+    );
+    return Boolean(result);
+  } catch(e) {
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // FORMULAS TAB
 // ═══════════════════════════════════════════════════════════════════
 function rFormulas() {
   var secs = gSecs();
+  var dims = gDs().filter(function(d){ return !d.name.startsWith('Spectrum — '); });
   if (!secs.length) return '<div class="content"><div class="card"><p class="tm">Add sections first.</p></div></div>';
+
+  // Dim name list for hint display
+  var secDimHints = {};
+  secs.forEach(function(sec){
+    secDimHints[sec.id] = dims.filter(function(d){ return (sec.activeDimIds||[]).includes(d.id); }).map(function(d){ return d.name; });
+  });
 
   var html = '<div class="content">'
     + '<div class="ph" style="margin-bottom:16px">'
-    + '<div><h2>Formulas</h2><p class="tm tsm mt1">Define how scores are classified into outcome labels for each section.</p></div>'
+    + '<div><h2>Formulas</h2><p class="tm tsm mt1">Write score-based expressions to classify each dimension. Use <strong>&lt;DimName&gt;</strong> for scores, <strong>Max()</strong>, <strong>Min()</strong>, <strong>Avg()</strong>, <strong>Pct()</strong>.</p></div>'
     + '<button class="btn bp" onclick="svAllFormulas()"><i class="ti ti-check"></i> Save All</button></div>';
 
+  // Syntax reference card
+  html += '<div class="card" style="margin-bottom:16px;padding:14px;background:#f8fafc">'
+    + '<div class="fgl mb2" style="font-size:12px">Formula Reference</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;font-size:12px">'
+    + '<div><code style="color:var(--primary)">&lt;DimName&gt;</code> <span class="tm">→ raw score of that dimension</span></div>'
+    + '<div><code style="color:var(--primary)">Max(&lt;A&gt;, &lt;B&gt;, &lt;C&gt;)</code> <span class="tm">→ highest of those scores</span></div>'
+    + '<div><code style="color:var(--primary)">&lt;self&gt;</code> <span class="tm">→ current dimension being tested</span></div>'
+    + '<div><code style="color:var(--primary)">Min() / Avg() / Sum()</code> <span class="tm">→ math functions</span></div>'
+    + '<div><code style="color:var(--primary)">&gt;= Max(&lt;A&gt;,&lt;B&gt;) - 5</code> <span class="tm">→ implicit &lt;self&gt; comparison</span></div>'
+    + '<div><code style="color:var(--primary)">Pct(&lt;self&gt;) &gt;= 65</code> <span class="tm">→ converts to % of dim max</span></div>'
+    + '</div></div>';
+
   secs.forEach(function(sec, si){
-    var cf = sec.classificationFormula || 'ranges';
     var fl = sec.formulaLabels || {};
-    var badgeCls = cf==='pt_delta'?'bbl':cf==='relative_max'?'bpur':'bdft';
-    var badgeTxt = cf==='pt_delta'?'PT Delta':cf==='relative_max'?'Relative Max':'Static Ranges';
+    var tiers = fl.formulaTiers || [];
+    var hints = secDimHints[sec.id] || [];
 
-    html += '<div class="card" style="margin-bottom:12px">';
-    html += '<div class="fx ic jb mb3">';
-    html += '<div><strong>' + esc(sec.title) + '</strong><span class="bdg ' + badgeCls + ' ml2">' + badgeTxt + '</span></div>';
-    html += '<select onchange="updSecFormula(' + si + ',this.value)" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px">'
-      + '<option value="ranges"' + (cf==='ranges'?' selected':'') + '>Static Ranges</option>'
-      + '<option value="pt_delta"' + (cf==='pt_delta'?' selected':'') + '>PT Delta</option>'
-      + '<option value="relative_max"' + (cf==='relative_max'?' selected':'') + '>Relative Max</option>'
-      + '</select></div>';
+    html += '<div class="card" style="margin-bottom:16px">';
+    html += '<div class="fx ic jb mb3">'
+      + '<strong>' + esc(sec.title) + '</strong>'
+      + '<span class="tm tsm" style="font-size:11px">' + hints.length + ' dimensions: ' + hints.slice(0,4).map(function(n){ return '&lt;'+esc(n)+'&gt;'; }).join(', ') + (hints.length>4?'...':'') + '</span>'
+      + '</div>';
 
-    if (cf === 'pt_delta') {
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border);border-radius:8px;overflow:hidden">';
-      // Tier 1
-      html += '<div style="background:var(--surface);padding:12px">';
-      html += '<div class="tm tsm mb2" style="font-size:10px;text-transform:uppercase">Tier 1 — Top</div>';
-      html += '<input type="text" value="' + esc(fl.tier1||'Personality Type') + '" placeholder="Personality Type" onchange="updFL(' + si + ',\'tier1\',this.value)" style="width:100%;margin-bottom:8px;font-weight:600;padding:4px;border:none;border-bottom:1px solid var(--border);background:transparent">';
-      html += '<div class="fx g1 ic"><span class="tm tsm">±</span><input type="number" value="' + (fl.delta1!=null?fl.delta1:1.5) + '" step="0.5" min="0" max="20" onchange="updFL(' + si + ',\'delta1\',Number(this.value))" style="width:60px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px"><span class="tm tsm">pct pts from max</span></div>';
+    tiers.forEach(function(t, ti){
+      html += '<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">';
+      html += '<div class="fx ic jb mb3"><span class="fgl" style="font-size:12px">Tier ' + (ti+1) + '</span>'
+        + '<button class="btn bd bic bsm" onclick="rmFormulaTier(' + si + ',' + ti + ')"><i class="ti ti-trash"></i></button></div>';
+
+      // Formula field
+      html += '<div class="fg">'
+        + '<label style="font-size:10px;text-transform:uppercase;letter-spacing:.05em">Formula</label>'
+        + '<input type="text" value="' + esc(t.formula||'') + '" placeholder="e.g.  >= Max(<A>,<B>,<C>) - 5  or  = Max(<A>,<B>)" '
+        + 'onchange="updFormulaTier(' + si + ',' + ti + ',\'formula\',this.value)" '
+        + 'style="font-family:\'Courier New\',monospace;font-size:13px;background:#f8faff;border-color:#c7d2fe">'
+        + '</div>';
+
+      // Match preview if test results available
+      if (S._testResults) {
+        var scores = S._testResults.scores;
+        var secDims = dims.filter(function(d){ return (sec.activeDimIds||[]).includes(d.id); });
+        if (t.formula && secDims.length) {
+          var matches = secDims.filter(function(d){ return evalFormula(t.formula, d.id, scores, secDims); }).map(function(d){ return d.name; });
+          html += '<div style="font-size:11px;padding:4px 8px;border-radius:4px;margin-bottom:8px;background:' + (matches.length?'#f0fdf4':'#fef2f2') + ';color:' + (matches.length?'#15803d':'#b91c1c') + '">'
+            + (matches.length ? '✓ Matches: ' + matches.join(', ') : '✗ No matches with current test scores') + '</div>';
+        }
+      }
+
+      html += '<div class="fg"><label style="font-size:10px">Label</label>'
+        + '<input type="text" value="' + esc(t.label||'') + '" placeholder="e.g. Personality Type" '
+        + 'onchange="updFormulaTier(' + si + ',' + ti + ',\'label\',this.value)" style="font-weight:600"></div>';
+      html += '<div class="fg"><label style="font-size:10px">Description</label>'
+        + '<input type="text" value="' + esc(t.description||'') + '" placeholder="Brief explanation shown in results" '
+        + 'onchange="updFormulaTier(' + si + ',' + ti + ',\'description\',this.value)"></div>';
+      html += '<div class="fg" style="margin-bottom:0"><label style="font-size:10px">Recommendation</label>'
+        + '<input type="text" value="' + esc(t.recommendation||'') + '" placeholder="Next step or coaching insight" '
+        + 'onchange="updFormulaTier(' + si + ',' + ti + ',\'recommendation\',this.value)"></div>';
       html += '</div>';
-      // Tier 2
-      html += '<div style="background:var(--surface);padding:12px">';
-      html += '<div class="tm tsm mb2" style="font-size:10px;text-transform:uppercase">Tier 2 — Highly Impacting</div>';
-      html += '<input type="text" value="' + esc(fl.tier2||'Highly Impacting Type') + '" placeholder="Highly Impacting Type" onchange="updFL(' + si + ',\'tier2\',this.value)" style="width:100%;margin-bottom:8px;font-weight:600;padding:4px;border:none;border-bottom:1px solid var(--border);background:transparent">';
-      html += '<div class="fx g1 ic"><span class="tm tsm">≥</span><input type="number" value="' + (fl.delta2!=null?fl.delta2:65) + '" min="0" max="100" onchange="updFL(' + si + ',\'delta2\',Number(this.value))" style="width:60px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px"><span class="tm tsm">% of max score</span></div>';
-      html += '</div>';
-      // Tier 3
-      html += '<div style="background:var(--surface);padding:12px">';
-      html += '<div class="tm tsm mb2" style="font-size:10px;text-transform:uppercase">Tier 3 — Secondary</div>';
-      html += '<input type="text" value="' + esc(fl.tier3||'Secondary Type') + '" placeholder="Secondary Type" onchange="updFL(' + si + ',\'tier3\',this.value)" style="width:100%;margin-bottom:8px;font-weight:600;padding:4px;border:none;border-bottom:1px solid var(--border);background:transparent">';
-      html += '<div class="fx g1 ic"><span class="tm tsm">≥</span><input type="number" value="' + (fl.delta3!=null?fl.delta3:37) + '" min="0" max="100" onchange="updFL(' + si + ',\'delta3\',Number(this.value))" style="width:60px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px"><span class="tm tsm">% of max score</span></div>';
-      html += '</div>';
-      html += '</div>';
-    } else if (cf === 'relative_max') {
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border-radius:8px;overflow:hidden">';
-      // Tier 1
-      html += '<div style="background:var(--surface);padding:12px">';
-      html += '<div class="tm tsm mb2" style="font-size:10px;text-transform:uppercase">Tier 1 — Primary</div>';
-      html += '<input type="text" value="' + esc(fl.tier1||'Primary') + '" placeholder="Primary" onchange="updFL(' + si + ',\'tier1\',this.value)" style="width:100%;margin-bottom:8px;font-weight:600;padding:4px;border:none;border-bottom:1px solid var(--border);background:transparent">';
-      html += '<div class="fx g1 ic"><span class="tm tsm">±</span><input type="number" value="' + (fl.delta1!=null?fl.delta1:4) + '" min="0" max="50" onchange="updFL(' + si + ',\'delta1\',Number(this.value))" style="width:60px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px"><span class="tm tsm">pts from max</span></div>';
-      html += '</div>';
-      // Tier 2
-      html += '<div style="background:var(--surface);padding:12px">';
-      html += '<div class="tm tsm mb2" style="font-size:10px;text-transform:uppercase">Tier 2 — Secondary</div>';
-      html += '<input type="text" value="' + esc(fl.tier2||'Secondary') + '" placeholder="Secondary" onchange="updFL(' + si + ',\'tier2\',this.value)" style="width:100%;margin-bottom:8px;font-weight:600;padding:4px;border:none;border-bottom:1px solid var(--border);background:transparent">';
-      html += '<div class="fx g1 ic"><span class="tm tsm">Floor:</span><input type="number" value="' + (fl.delta2!=null?fl.delta2:40) + '" min="0" max="100" onchange="updFL(' + si + ',\'delta2\',Number(this.value))" style="width:60px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px"><span class="tm tsm">% of max</span></div>';
-      html += '</div>';
-      html += '</div>';
-    } else {
-      var tiers = fl.staticTiers || [];
-      html += '<div class="tm tsm mb2" style="padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--border)"><i class="ti ti-info-circle"></i> Define a label, description, and recommendation for each score range tier. Tier 1 = lowest range, Tier N = highest, matching the order set in the Dimensions tab.</div>';
-      tiers.forEach(function(t, ti){
-        html += '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px">';
-        html += '<div class="fx ic jb mb2"><span class="fgl" style="font-size:12px">Tier ' + (ti+1) + '</span>'
-          + '<button class="btn bd bic bsm" onclick="rmStaticTier(' + si + ',' + ti + ')"><i class="ti ti-trash"></i></button></div>';
-        html += '<div class="fg"><label style="font-size:10px">Label</label><input type="text" value="' + esc(t.label||'') + '" placeholder="e.g. Primary Motivator" onchange="updStaticTier(' + si + ',' + ti + ',\'label\',this.value)" style="font-weight:600"></div>';
-        html += '<div class="fg"><label style="font-size:10px">Description</label><input type="text" value="' + esc(t.description||'') + '" placeholder="Brief explanation shown in results" onchange="updStaticTier(' + si + ',' + ti + ',\'description\',this.value)"></div>';
-        html += '<div class="fg" style="margin-bottom:0"><label style="font-size:10px">Recommendation</label><input type="text" value="' + esc(t.recommendation||'') + '" placeholder="Next step or coaching insight" onchange="updStaticTier(' + si + ',' + ti + ',\'recommendation\',this.value)"></div>';
-        html += '</div>';
-      });
-      html += '<button class="btn bs bsm mt2" onclick="addStaticTier(' + si + ')"><i class="ti ti-plus"></i> Add Tier</button>';
+    });
+
+    if (!tiers.length) {
+      html += '<div style="text-align:center;padding:20px;border:2px dashed var(--border);border-radius:8px;color:var(--muted)">'
+        + '<p class="tsm">No tiers yet. Add a tier to define classification logic.</p></div>';
     }
+
+    html += '<div class="fx g2 mt3">'
+      + '<button class="btn bs bsm" onclick="addFormulaTier(' + si + ')"><i class="ti ti-plus"></i> Add Tier</button>'
+      + '<button class="btn bs bsm" onclick="addPtDeltaTemplate(' + si + ')"><i class="ti ti-wand"></i> PT Delta template</button>'
+      + '<button class="btn bs bsm" onclick="addRelMaxTemplate(' + si + ')"><i class="ti ti-wand"></i> Relative Max template</button>'
+      + '</div>';
     html += '</div>';
   });
 
@@ -1734,11 +1824,67 @@ function rFormulas() {
   return html;
 }
 
+function addFormulaTier(secIdx) {
+  var secs = gSecs();
+  if (!secs[secIdx]) return;
+  if (!secs[secIdx].formulaLabels) secs[secIdx].formulaLabels = {};
+  if (!secs[secIdx].formulaLabels.formulaTiers) secs[secIdx].formulaLabels.formulaTiers = [];
+  secs[secIdx].formulaLabels.formulaTiers.push({formula:'', label:'', description:'', recommendation:''});
+  render();
+}
+
+function rmFormulaTier(secIdx, tierIdx) {
+  var secs = gSecs();
+  if (!secs[secIdx] || !secs[secIdx].formulaLabels || !secs[secIdx].formulaLabels.formulaTiers) return;
+  secs[secIdx].formulaLabels.formulaTiers.splice(tierIdx, 1);
+  render();
+}
+
+function updFormulaTier(secIdx, tierIdx, key, val) {
+  var secs = gSecs();
+  if (!secs[secIdx] || !secs[secIdx].formulaLabels || !secs[secIdx].formulaLabels.formulaTiers) return;
+  secs[secIdx].formulaLabels.formulaTiers[tierIdx][key] = val;
+}
+
+function addPtDeltaTemplate(secIdx) {
+  var secs = gSecs(); if (!secs[secIdx]) return;
+  var dims = gDs().filter(function(d){ return !d.name.startsWith('Spectrum — ') && (secs[secIdx].activeDimIds||[]).includes(d.id); });
+  var dimRefs = dims.map(function(d){ return 'Pct(<' + d.name + '>)'; }).join(', ');
+  var fl = secs[secIdx].formulaLabels || {};
+  fl.formulaTiers = [
+    {formula: 'Pct(<self>) >= Max(' + dimRefs + ') - 1.5', label:'Personality Type', description:'Core expression of who you are', recommendation:'Own this type fully — it is your natural strength and signature.'},
+    {formula: 'Pct(<self>) >= 65 AND Pct(<self>) < Max(' + dimRefs + ') - 1.5', label:'Highly Impacting Type', description:'Significantly shapes your behavior', recommendation:'Lean into this type in contexts where it is an asset.'},
+    {formula: 'Pct(<self>) >= 37 AND Pct(<self>) < 65', label:'Secondary Type', description:'A background influence on how you show up', recommendation:'Notice when this type activates and leverage it intentionally.'},
+  ];
+  secs[secIdx].formulaLabels = fl;
+  render();
+}
+
+function addRelMaxTemplate(secIdx) {
+  var secs = gSecs(); if (!secs[secIdx]) return;
+  var dims = gDs().filter(function(d){ return !d.name.startsWith('Spectrum — ') && (secs[secIdx].activeDimIds||[]).includes(d.id); });
+  var dimRefs = dims.map(function(d){ return '<' + d.name + '>'; }).join(', ');
+  var fl = secs[secIdx].formulaLabels || {};
+  fl.formulaTiers = [
+    {formula: '>= Max(' + dimRefs + ') - 4', label:'Primary', description:'Your dominant pattern', recommendation:'Understand this deeply — it drives most of your relational behavior.'},
+    {formula: '>= Max(' + dimRefs + ') - 8 AND <self> < Max(' + dimRefs + ') - 4', label:'Secondary', description:'A secondary influence', recommendation:'Notice when this pattern activates in your life.'},
+  ];
+  secs[secIdx].formulaLabels = fl;
+  render();
+}
+
 function updFL(secIdx, key, val) {
   var secs = gSecs();
   if (!secs[secIdx]) return;
   if (!secs[secIdx].formulaLabels) secs[secIdx].formulaLabels = {};
   secs[secIdx].formulaLabels[key] = val;
+}
+
+function updSecFormula(secIdx, val) {
+  var secs = gSecs();
+  if (!secs[secIdx]) return;
+  secs[secIdx].classificationFormula = val;
+  render();
 }
 
 function addStaticTier(secIdx) {
@@ -1752,22 +1898,15 @@ function addStaticTier(secIdx) {
 
 function rmStaticTier(secIdx, tierIdx) {
   var secs = gSecs();
-  if (!secs[secIdx]?.formulaLabels?.staticTiers) return;
+  if (!secs[secIdx] || !secs[secIdx].formulaLabels || !secs[secIdx].formulaLabels.staticTiers) return;
   secs[secIdx].formulaLabels.staticTiers.splice(tierIdx, 1);
   render();
 }
 
 function updStaticTier(secIdx, tierIdx, key, val) {
   var secs = gSecs();
-  if (!secs[secIdx]?.formulaLabels?.staticTiers?.[tierIdx]) return;
+  if (!secs[secIdx] || !secs[secIdx].formulaLabels || !secs[secIdx].formulaLabels.staticTiers) return;
   secs[secIdx].formulaLabels.staticTiers[tierIdx][key] = val;
-}
-
-function updSecFormula(secIdx, val) {
-  var secs = gSecs();
-  if (!secs[secIdx]) return;
-  secs[secIdx].classificationFormula = val;
-  render();
 }
 
 function svAllFormulas() {
@@ -1782,6 +1921,7 @@ function svAllFormulas() {
   });
   Promise.all(saves).then(function(){ toast('Formulas saved!'); }).catch(function(e){ toast('Save error: '+e.message,'err'); });
 }
+
 
 
 
