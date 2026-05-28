@@ -1644,9 +1644,12 @@ function runTestScores() {
     var matched = {};
     formulaTiers.forEach(function(tier){
       if (!tier.formula || !tier.label) return;
+      console.log('[formulaTier] testing tier:', tier.label, 'formula:', tier.formula.substring(0,60));
       secDims.forEach(function(d){
         if (matched[d.id]) return;
-        if (evalFormula(tier.formula, d.id, scores, secDims)) {
+        var result = evalFormula(tier.formula, d.id, scores, secDims);
+        console.log('[formulaTier]  dim:', d.name, 'score:', scores[d.id], '→', result);
+        if (result) {
           ranks[d.id] = {label:tier.label, description:tier.description||'', recommendation:tier.recommendation||''};
           matched[d.id] = true;
         }
@@ -1738,6 +1741,7 @@ function evalFormula(formula, dimId, scores, dims) {
   expr = expr.replace(/([^><!=])=([^>=])/g, '$1==$2');
 
   try {
+    console.log('[evalFormula] expr:', expr.substring(0, 120));
     var fn = new Function('__avg','__sum','return (' + expr + ')');
     var result = fn(
       function() { var a=Array.from(arguments); return a.reduce(function(s,v){return s+v;},0)/a.length; },
@@ -1745,6 +1749,7 @@ function evalFormula(formula, dimId, scores, dims) {
     );
     return Boolean(result);
   } catch(e) {
+    console.error('[evalFormula] ERROR:', e.message, '\nexpr:', expr.substring(0,200), '\nformula:', formula.substring(0,100));
     return false;
   }
 }
