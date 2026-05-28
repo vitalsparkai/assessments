@@ -242,10 +242,11 @@ function evalFormula(formula, dimId, rawScores, dims, dimMaxes) {
     (dimObj && dimObj.ranges && dimObj.ranges.length
       ? Math.max.apply(null, dimObj.ranges.map(function(r){ return r.max||0; })) : 100);
 
-  // Pct(<DimName>) — each dim uses its OWN max (matches PHP per-dim percentage)
+  // Pct(<DimName>) — each dim uses its OWN max (dimMaxes if available, else ranges, else 100)
   dims.forEach(function(d) {
-    var dMax = d.ranges && d.ranges.length
-      ? Math.max.apply(null, d.ranges.map(function(r){ return r.max||0; })) : 100;
+    var dMax = (dimMaxes && dimMaxes[d.id]) ||
+      (d.ranges && d.ranges.length
+        ? Math.max.apply(null, d.ranges.map(function(r){ return r.max||0; })) : 100);
     var sc = rawScores[d.id] || 0;
     // Replace Pct(<DimName>) before raw <DimName> to avoid double-substitution
     var escapedName = d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
@@ -305,13 +306,12 @@ function mxSc(qs, dId) {
 function classifyAll(rawScores) {
   const overrides = {};
   if (!S._hiddenDims) S._hiddenDims = new Set();
-  console.log('[classifyAll] SECS count:', (SECS||[]).length);
-  if (SECS && SECS[0]) console.log('[classifyAll] first sec formula_labels:', JSON.stringify(SECS[0].formula_labels), 'formulaLabels:', JSON.stringify(SECS[0].formulaLabels));
+
 
   (SECS || []).forEach(sec => {
     const formula = sec.classification_formula || sec.classificationFormula || 'ranges';
     const fl = sec.formula_labels || sec.formulaLabels || {};
-    console.log('[classifyAll] sec:', sec.title, 'formula:', formula, 'fl keys:', Object.keys(fl), 'formulaTiers:', fl.formulaTiers&&fl.formulaTiers.length);
+
     const secDimIds2 = sec.active_dim_ids || sec.activeDimIds || [];
     const secDimsAll = DIMS.filter(d => secDimIds2.includes(d.id));
 
@@ -820,7 +820,11 @@ async function submitAssessment() {
     contact:        { ...S.contact },
     answers:        { ...S.answers },
     scores:         Object.fromEntries(DIMS.map(d => [d.name, scores[d.id] || 0])),
-    ranks:          Object.fromEntries(DIMS.map(d => [d.name, ranks[d.id] || {}])),
+    ranks:          Object.fromEntries(DIMS.map(d => {
+      // finalRanks may be keyed by dim ID (formulaTiers overrides) or dim name (getRanks)
+      const r = finalRanks[d.id] || finalRanks[d.name] || {};
+      return [d.name, r];
+    })),
     tied_top:       tiedTop,
     webhook_status: ASM.webhook_url ? 'pending' : 'not_configured',
   };
