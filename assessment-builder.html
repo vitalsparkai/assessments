@@ -1641,9 +1641,14 @@ function runTestScores() {
     var formulaTiers = fl.formulaTiers;
     if (!formulaTiers || !formulaTiers.length) return;
     var secDims = dims.filter(function(d){ return (sec.activeDimIds||[]).includes(d.id); });
+    console.log('[formulaTier] building secDims for', sec.title, '— activeDimIds:', (sec.activeDimIds||[]).length, 'dims pool:', dims.length);
+    var firstMatch = dims.filter(function(d){ return (sec.activeDimIds||[]).includes(d.id); });
+    console.log('[formulaTier] secDims result:', firstMatch.map(function(d){ return d.name; }).join(', ') || 'NONE');
     var matched = {};
     formulaTiers.forEach(function(tier){
       if (!tier.formula || !tier.label) return;
+      if (secDims.length === 0) { console.warn('[formulaTier] section', sec.title, 'has EMPTY secDims! activeDimIds:', sec.activeDimIds && sec.activeDimIds.length, 'dims available:', dims.length); }
+      else { console.log('[formulaTier] section', sec.title, 'secDims:', secDims.map(function(d){ return d.name + '(' + (scores[d.id]||'?') + ')'; }).join(', ')); }
       console.log('[formulaTier] testing tier:', tier.label, 'formula:', tier.formula.substring(0,60));
       secDims.forEach(function(d){
         if (matched[d.id]) return;
