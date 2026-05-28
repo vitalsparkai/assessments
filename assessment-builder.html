@@ -245,7 +245,6 @@ async function loadAll(){
   const asms=await sbGet('ab_assessments',`tenant_id=eq.${_tenantId}&order=created_at.desc`);
   db={assessments:asms.map(dbToAsm),questions:{},dimensions:{},sections:{},responses:{}};
   if(db.sections===undefined)db.sections={};
-  console.log('[loadAll] assessments loaded:',db.assessments.length);
   await Promise.all(asms.map(async a=>{
     const[dims,secs,qs,rs]=await Promise.all([
       sbGet('ab_dimensions',`assessment_id=eq.${a.id}&order=order_index`),
@@ -256,10 +255,6 @@ async function loadAll(){
     db.dimensions[a.id]=dims.map(dbToDim);
     db.sections[a.id]=secs.map(dbToSec);
     db.questions[a.id]=qs.map(dbToQ);
-    console.log(`[loadAll] ${a.title}: ${dims.length} dims, ${secs.length} secs, ${qs.length} qs`);
-    if(secs.length) console.log('[loadAll] first sec formulaLabels:', JSON.stringify(secs[0].formula_labels||secs[0].formulaLabels));
-    const scoredQs = qs.filter(q => q.type==='ranking' || q.type==='multiple_choice');
-    if(scoredQs.length) { const fq=scoredQs[0]; console.log('[loadAll] first scored q:', fq.title&&fq.title.substring(0,40), 'opts:', (fq.options||[]).length, 'first opt scores:', JSON.stringify(Object.entries((fq.options&&fq.options[0]&&fq.options[0].scores)||{}).slice(0,2))); }
     db.responses[a.id]=rs;
   }));
 }
@@ -1012,9 +1007,45 @@ function rRMod(){
   const tiedTop    = resp.tiedTop || resp.tied_top || [];
   // Parse scores/ranks/contact — may be string (if Supabase stored as text) or object
   const parseJ = v => { try { return typeof v==='string' ? JSON.parse(v) : (v||{}); } catch{ return {}; } };
-  const scores = parseJ(resp.scores);
-  const ranks  = parseJ(resp.ranks);
-  const contact= parseJ(resp.contact);
+  const scores  = parseJ(resp.scores);
+  const storedRanks = parseJ(resp.ranks);
+  const contact = parseJ(resp.contact);
+  // Re-apply current formulaTiers to stored scores (overrides stale stored ranks)
+  const secs = gSecs();
+  const allDims = gDs();
+  const allQs = orderedQs();
+  // Build score map keyed by dim id
+  const scoreById = {};
+  allDims.forEach(d => { scoreById[d.id] = Number(scores[d.name] || scores[d.id] || 0); });
+  // Compute dimMaxes
+  const dimMaxesR = {};
+  allDims.forEach(d => {
+    if (d.maxScore) { dimMaxesR[d.id]=d.maxScore; return; }
+    var mx=mxSc(allQs,d.id); if(mx>0){dimMaxesR[d.id]=mx;return;}
+    if(d.ranges&&d.ranges.length){var rm=Math.max.apply(null,d.ranges.map(r=>r.max||0));if(rm>0){dimMaxesR[d.id]=rm;return;}}
+    dimMaxesR[d.id]=100;
+  });
+  // Apply formulaTiers per section
+  const liveRanks = {};
+  secs.forEach(sec => {
+    const fl = sec.formulaLabels || {};
+    const tiers = fl.formulaTiers;
+    if (!tiers || !tiers.length) return;
+    const secDims = allDims.filter(d => (sec.activeDimIds||[]).includes(d.id));
+    const matched = {};
+    tiers.forEach(tier => {
+      if (!tier.formula || !tier.label) return;
+      secDims.forEach(d => {
+        if (matched[d.id]) return;
+        if (evalFormula(tier.formula, d.id, scoreById, secDims, dimMaxesR)) {
+          liveRanks[d.name] = {label:tier.label, description:tier.description||'', recommendation:tier.recommendation||''};
+          matched[d.id] = true;
+        }
+      });
+    });
+  });
+  // Merge: liveRanks (formulaTiers) beats storedRanks (static)
+  const ranks = { ...storedRanks, ...liveRanks };
   // Scores keyed by dim NAME in Supabase; tiedTop keyed by dim ID
   return `<div class="mov" onclick="bgC(event)"><div class="modal mw">
     <div class="mhd"><h2>Response Detail</h2><div class="fx g2">${asm?.webhookUrl?`<button class="btn bs bsm" onclick="rfFromM('${resp.id}')"><i class="ti ti-refresh"></i> Refire</button>`:''}<button class="btn bg bic" onclick="clM()"><i class="ti ti-x"></i></button></div></div>
@@ -1591,8 +1622,6 @@ function rTest(asm) {
 function runTestScores() {
   var dims = gDs().filter(function(d){ return !d.name.startsWith('Spectrum — '); });
   var secs = gSecs();
-  console.log('[runTest] dims:', dims.length, 'secs:', secs.length);
-  secs.forEach(function(s,i){ console.log('[runTest] sec',i,s.title,'activeDimIds:',s.activeDimIds&&s.activeDimIds.length,'formula:',s.classificationFormula,'tiers:',(s.formulaLabels&&s.formulaLabels.formulaTiers&&s.formulaLabels.formulaTiers.length)||0); });
   var scores = {};
   dims.forEach(function(d){
     var el = document.getElementById('ts-' + d.id);
@@ -1651,7 +1680,6 @@ function runTestScores() {
     dimMaxes[d.id] = 100;
   });
   var _inv = dims.find(function(d){ return d.name==='Innovator'; });
-  if (_inv) console.log('[runTest] Innovator stored maxScore:', _inv.maxScore, '→ dimMax:', dimMaxes[_inv.id]);
 
   // Apply formulaTiers (user-written expressions) — highest priority
   secs.forEach(function(sec){
@@ -1659,19 +1687,12 @@ function runTestScores() {
     var formulaTiers = fl.formulaTiers;
     if (!formulaTiers || !formulaTiers.length) return;
     var secDims = dims.filter(function(d){ return (sec.activeDimIds||[]).includes(d.id); });
-    console.log('[formulaTier] building secDims for', sec.title, '— activeDimIds:', (sec.activeDimIds||[]).length, 'dims pool:', dims.length);
-    var firstMatch = dims.filter(function(d){ return (sec.activeDimIds||[]).includes(d.id); });
-    console.log('[formulaTier] secDims result:', firstMatch.map(function(d){ return d.name; }).join(', ') || 'NONE');
     var matched = {};
     formulaTiers.forEach(function(tier){
       if (!tier.formula || !tier.label) return;
-      if (secDims.length === 0) { console.warn('[formulaTier] section', sec.title, 'has EMPTY secDims! activeDimIds:', sec.activeDimIds && sec.activeDimIds.length, 'dims available:', dims.length); }
-      else { console.log('[formulaTier] section', sec.title, 'secDims:', secDims.map(function(d){ return d.name + '(' + (scores[d.id]||'?') + ')'; }).join(', ')); }
-      console.log('[formulaTier] testing tier:', tier.label, 'formula:', tier.formula.substring(0,60));
       secDims.forEach(function(d){
         if (matched[d.id]) return;
         var result = evalFormula(tier.formula, d.id, scores, secDims, dimMaxes);
-        console.log('[formulaTier]  dim:', d.name, 'score:', scores[d.id], '→', result);
         if (result) {
           ranks[d.id] = {label:tier.label, description:tier.description||'', recommendation:tier.recommendation||''};
           matched[d.id] = true;
@@ -1773,7 +1794,6 @@ function evalFormula(formula, dimId, scores, dims, dimMaxes) {
   expr = expr.replace(/([^><!=])=([^>=])/g, '$1==$2');
 
   try {
-    console.log('[evalFormula] expr:', expr.substring(0, 120));
     var fn = new Function('__avg','__sum','return (' + expr + ')');
     var result = fn(
       function() { var a=Array.from(arguments); return a.reduce(function(s,v){return s+v;},0)/a.length; },
@@ -1781,7 +1801,6 @@ function evalFormula(formula, dimId, scores, dims, dimMaxes) {
     );
     return Boolean(result);
   } catch(e) {
-    console.error('[evalFormula] ERROR:', e.message, '\nexpr:', expr.substring(0,200), '\nformula:', formula.substring(0,100));
     return false;
   }
 }
