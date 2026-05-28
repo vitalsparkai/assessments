@@ -1589,6 +1589,8 @@ function rTest(asm) {
 function runTestScores() {
   var dims = gDs().filter(function(d){ return !d.name.startsWith('Spectrum — '); });
   var secs = gSecs();
+  console.log('[runTest] dims:', dims.length, 'secs:', secs.length);
+  secs.forEach(function(s,i){ console.log('[runTest] sec',i,s.title,'activeDimIds:',s.activeDimIds&&s.activeDimIds.length,'formula:',s.classificationFormula,'tiers:',(s.formulaLabels&&s.formulaLabels.formulaTiers&&s.formulaLabels.formulaTiers.length)||0); });
   var scores = {};
   dims.forEach(function(d){
     var el = document.getElementById('ts-' + d.id);
@@ -1602,6 +1604,8 @@ function runTestScores() {
     var fl = sec.formulaLabels || {};
     var secDims = dims.filter(function(d){ return (sec.activeDimIds||[]).includes(d.id); });
     if (!secDims.length) return;
+    // If formulaTiers defined, they take priority — skip built-in formulas
+    if (fl.formulaTiers && fl.formulaTiers.length) return;
     if (formula === 'pt_delta') {
       var PT_MAX = {Adventurer:28};
       var pcts = {};
@@ -2037,7 +2041,10 @@ function importJSONObj(obj){
   const secNameToId={};
   const secs=(obj.sections||[]).map((s,i)=>{
     const newId=uid();secNameToId[s.title]=newId;
-    return{id:newId,aId:id,title:s.title,description:s.description||'',orderIndex:s.orderIndex??i,activeDimIds:(s.activeDimensions||[]).map(n=>dimNameToId[n]).filter(Boolean)};
+    return{id:newId,aId:id,title:s.title,description:s.description||'',orderIndex:s.orderIndex??i,
+      activeDimIds:(s.activeDimensions||[]).map(n=>dimNameToId[n]).filter(Boolean),
+      classificationFormula:s.classificationFormula||'ranges',
+      formulaLabels:s.formulaLabels||{}};
   });
   const qs=(obj.questions||[]).map((q,i)=>({
     id:uid(),aId:id,sectionId:q.section?secNameToId[q.section]||null:null,
