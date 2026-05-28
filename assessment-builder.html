@@ -1698,7 +1698,7 @@ function fillTestZero() {
 // Operators: >, <, >=, <=, =, +, -, *, /
 // If formula starts with operator, <self> is prepended automatically
 // ═══════════════════════════════════════════════════════════════════
-function evalFormula(formula, dimId, scores, dims) {
+function evalFormula(formula, dimId, scores, dims, dimMaxes) {
   if (!formula || !formula.trim()) return false;
   var expr = formula.trim();
   var selfScore = scores[dimId] || 0;
@@ -1708,15 +1708,17 @@ function evalFormula(formula, dimId, scores, dims) {
   dims.forEach(function(d) { byName[d.name] = scores[d.id] || 0; });
 
 
-  // Current dim max (for Pct(<self>))
+  // Current dim max — use computed max from questions if available, else ranges, else 100
   var dimObj = dims.find(function(d){ return d.id===dimId; });
-  var dimMax = dimObj && dimObj.ranges && dimObj.ranges.length
-    ? Math.max.apply(null, dimObj.ranges.map(function(r){ return r.max||0; })) : 100;
+  var dimMax = (dimMaxes && dimMaxes[dimId]) ||
+    (dimObj && dimObj.ranges && dimObj.ranges.length
+      ? Math.max.apply(null, dimObj.ranges.map(function(r){ return r.max||0; })) : 100);
 
-  // Pct(<DimName>) — each referenced dim uses its OWN max (exact PHP per-dim percentage)
+  // Pct(<DimName>) — each referenced dim uses its OWN max from question scoring
   dims.forEach(function(d) {
-    var dMax = d.ranges && d.ranges.length
-      ? Math.max.apply(null, d.ranges.map(function(r){ return r.max||0; })) : 100;
+    var dMax = (dimMaxes && dimMaxes[d.id]) ||
+      (d.ranges && d.ranges.length
+        ? Math.max.apply(null, d.ranges.map(function(r){ return r.max||0; })) : 100);
     var sc = scores[d.id] || 0;
     var rePct = new RegExp('Pct\\(<' + d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '>\\)', 'gi');
     expr = expr.replace(rePct, '(' + sc + '/' + dMax + '*100)');
