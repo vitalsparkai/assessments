@@ -231,21 +231,39 @@ function getTied(scores) {
 const PT_MAX_SCORES = { 'Adventurer': 28 };
 const PT_DEFAULT_MAX = 32;
 
-function evalFormula(formula, dimId, rawScores, dims) {
+function evalFormula(formula, dimId, rawScores, dims, dimMaxes) {
   if (!formula || !formula.trim()) return false;
   var expr = formula.trim();
   var selfScore = rawScores[dimId] || 0;
+
+  // Current dim max — use question-computed max if available
+  var dimObj = dims.find(function(d){ return d.id===dimId; });
+  var dimMax = (dimMaxes && dimMaxes[dimId]) ||
+    (dimObj && dimObj.ranges && dimObj.ranges.length
+      ? Math.max.apply(null, dimObj.ranges.map(function(r){ return r.max||0; })) : 100);
+
+  // Pct(<DimName>) — each dim uses its OWN max (matches PHP per-dim percentage)
+  dims.forEach(function(d) {
+    var dMax = d.ranges && d.ranges.length
+      ? Math.max.apply(null, d.ranges.map(function(r){ return r.max||0; })) : 100;
+    var sc = rawScores[d.id] || 0;
+    // Replace Pct(<DimName>) before raw <DimName> to avoid double-substitution
+    var escapedName = d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    expr = expr.replace(new RegExp('Pct\\(<' + escapedName + '>\\)', 'gi'), '(' + sc + '/' + dMax + '*100)');
+  });
+  expr = expr.replace(/Pct\(<self>\)/gi, '(' + selfScore + '/' + dimMax + '*100)');
+  expr = expr.replace(/Pct\(([^)]+)\)/gi, function(_, inner) {
+    return '(' + inner + '/' + dimMax + '*100)';
+  });
+
+  // Replace remaining <DimName> raw score references
   dims.forEach(function(d) {
     var re = new RegExp('<' + d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '>', 'gi');
     expr = expr.replace(re, String(rawScores[d.id] || 0));
   });
   expr = expr.replace(/<self>/gi, String(selfScore));
-  var dimObj = dims.find(function(d){ return d.id===dimId; });
-  var dimMax = dimObj && dimObj.ranges && dimObj.ranges.length
-    ? Math.max.apply(null, dimObj.ranges.map(function(r){ return r.max||0; })) : 100;
-  expr = expr.replace(/Pct\(([^)]+)\)/gi, function(_, inner) {
-    return '(' + inner + '/' + dimMax + '*100)';
-  });
+
+  expr = expr.replace(/\bAND\b/gi, '&&').replace(/\bOR\b/gi, '||');
   expr = expr.replace(/\bMax\(/gi, 'Math.max(')
              .replace(/\bMin\(/gi, 'Math.min(')
              .replace(/\bAvg\(/gi, '__avg(')
@@ -262,6 +280,28 @@ function evalFormula(formula, dimId, rawScores, dims) {
   } catch(e) { return false; }
 }
 
+
+
+// Compute max possible score for a dimension from questions
+function mxSc(qs, dId) {
+  var m = 0;
+  (qs || []).forEach(function(q) {
+    if (q.type === 'multiple_choice') {
+      var sc = (q.options||[]).map(function(o){ return Number((o.scores||{})[dId]||0); });
+      if (sc.length) m += Math.max.apply(null, [0].concat(sc));
+    }
+    if (q.type === 'multi_select') {
+      (q.options||[]).forEach(function(o){ var s=Number((o.scores||{})[dId]||0); if(s>0) m+=s; });
+    }
+    if (q.type === 'ranking') {
+      var weights = q.positionWeights || [];
+      var maxW = weights.length ? Math.max.apply(null, weights) : 1;
+      (q.options||[]).forEach(function(o){ var s=Number((o.scores||{})[dId]||0); if(s>0) m+=s*maxW; });
+    }
+  });
+  return m;
+}
+
 function classifyAll(rawScores) {
   const overrides = {};
   if (!S._hiddenDims) S._hiddenDims = new Set();
@@ -275,13 +315,16 @@ function classifyAll(rawScores) {
     // formulaTiers takes priority — user-written expressions
     const formulaTiers = fl.formulaTiers;
     if (formulaTiers && formulaTiers.length) {
+      // Pre-compute max possible score per dim from questions
+      const dimMaxes = {};
+      secDimsAll.forEach(d => { dimMaxes[d.id] = mxSc(QS_ORDERED, d.id) || 100; });
       // Evaluate tiers in order; first match wins per dimension
       const matched = new Set();
       formulaTiers.forEach(tier => {
         if (!tier.formula || !tier.label) return;
         secDimsAll.forEach(d => {
           if (matched.has(d.id)) return; // already classified by higher-priority tier
-          if (evalFormula(tier.formula, d.id, rawScores, secDimsAll)) {
+          if (evalFormula(tier.formula, d.id, rawScores, secDimsAll, dimMaxes)) {
             overrides[d.id] = { label: tier.label, description: tier.description||'', recommendation: tier.recommendation||'' };
             matched.add(d.id);
           }
