@@ -320,14 +320,24 @@ function classifyAll(rawScores) {
     if (formulaTiers && formulaTiers.length) {
       // Pre-compute max possible score per dim from questions
       const dimMaxes = {};
-      secDimsAll.forEach(d => { dimMaxes[d.id] = mxSc(QS_ORDERED, d.id) || 100; });
+      secDimsAll.forEach(d => {
+        const mx = mxSc(QS_ORDERED, d.id);
+        dimMaxes[d.id] = mx || 100;
+        if (sec.title && (sec.title.includes('DISC') || sec.title.includes('Personality'))) {
+          console.log('[classify]', sec.title, d.name, 'score:', rawScores[d.id], 'mxSc:', mx, 'dimMax:', dimMaxes[d.id]);
+        }
+      });
       // Evaluate tiers in order; first match wins per dimension
       const matched = new Set();
       formulaTiers.forEach(tier => {
         if (!tier.formula || !tier.label) return;
         secDimsAll.forEach(d => {
           if (matched.has(d.id)) return; // already classified by higher-priority tier
-          if (evalFormula(tier.formula, d.id, rawScores, secDimsAll, dimMaxes)) {
+          const result = evalFormula(tier.formula, d.id, rawScores, secDimsAll, dimMaxes);
+          if (sec.title && (sec.title.includes('DISC') || sec.title.includes('Personality'))) {
+            console.log('[classify]', sec.title, d.name, 'tier:', tier.label, 'formula:', tier.formula.substring(0,50), '→', result);
+          }
+          if (result) {
             overrides[d.id] = { label: tier.label, description: tier.description||'', recommendation: tier.recommendation||'' };
             matched.add(d.id);
           }
@@ -335,6 +345,8 @@ function classifyAll(rawScores) {
       });
       return;
     }
+    // Log sections with no formulaTiers
+    if (sec.title) console.log('[classify] NO formulaTiers for section:', sec.title, 'fl keys:', Object.keys(fl));
 
     if (formula === 'ranges') {
       const staticTiers = fl.staticTiers;
