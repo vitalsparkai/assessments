@@ -234,8 +234,8 @@ function asmToDb(a){return{id:a.id,tenant_id:_tenantId,title:a.title,description
 function dbToAsm(r){return{id:r.id,title:r.title,description:r.description||'',status:r.status||'draft',brand:r.brand||{},webhookUrl:r.webhook_url||'',webhookHeaders:r.webhook_headers||'{"Content-Type":"application/json"}',showResults:r.show_results!==false,allowRetakes:r.allow_retakes!==false,createdAt:r.created_at};}
 function qToDb(q,aId){return{id:q.id,assessment_id:aId||q.aId,section_id:q.sectionId||null,type:q.type,title:q.title||'',description:q.description||'',required:q.required!==false,order_index:q.orderIndex||0,position_weights:q.positionWeights||[],contact_fields:q.contactFields||[],options:q.options||[]};}
 function dbToQ(r){return{id:r.id,aId:r.assessment_id,sectionId:r.section_id,type:r.type,title:r.title||'',description:r.description||'',required:r.required!==false,orderIndex:r.order_index||0,positionWeights:r.position_weights||[],contactFields:r.contact_fields||[],options:r.options||[]};}
-function dimToDb(d,aId){return{id:d.id,assessment_id:aId||d.aId,name:d.name,description:d.description||'',color:d.color||'#3b82f6',order_index:d.orderIndex||0,ranges:d.ranges||[],show_in_results:d.showInResults!==false};}
-function dbToDim(r){return{id:r.id,aId:r.assessment_id,name:r.name,description:r.description||'',color:r.color||'#3b82f6',orderIndex:r.order_index||0,ranges:r.ranges||[],showInResults:r.show_in_results!==false};}
+function dimToDb(d,aId){return{id:d.id,assessment_id:aId||d.aId,name:d.name,description:d.description||'',color:d.color||'#3b82f6',order_index:d.orderIndex||0,ranges:d.ranges||[],show_in_results:d.showInResults!==false,max_score:d.maxScore||null};}
+function dbToDim(r){return{id:r.id,aId:r.assessment_id,name:r.name,description:r.description||'',color:r.color||'#3b82f6',orderIndex:r.order_index||0,ranges:r.ranges||[],showInResults:r.show_in_results!==false,maxScore:r.max_score||null};}
 function secToDb(s,aId){return{id:s.id,assessment_id:aId||s.aId,title:s.title,description:s.description||'',order_index:s.orderIndex||0,active_dim_ids:s.activeDimIds||[],classification_formula:s.classificationFormula||'ranges',formula_labels:s.formulaLabels||{}};}
 function dbToSec(r){return{id:r.id,aId:r.assessment_id,title:r.title,description:r.description||'',orderIndex:r.order_index||0,activeDimIds:r.active_dim_ids||[],classificationFormula:r.classification_formula||'ranges',formulaLabels:r.formula_labels||{}};}
 
@@ -1637,6 +1637,22 @@ function runTestScores() {
       });
     }
   });
+  // Pre-compute max possible score per dim — use stored maxScore first
+  var _qs = orderedQs();
+  var dimMaxes = {};
+  dims.forEach(function(d){
+    if (d.maxScore && d.maxScore > 0) { dimMaxes[d.id] = d.maxScore; return; }
+    var mx = mxSc(_qs, d.id);
+    if (mx > 0) { dimMaxes[d.id] = mx; return; }
+    if (d.ranges && d.ranges.length) {
+      var rMax = Math.max.apply(null, d.ranges.map(function(r){ return r.max||0; }));
+      if (rMax > 0) { dimMaxes[d.id] = rMax; return; }
+    }
+    dimMaxes[d.id] = 100;
+  });
+  var _inv = dims.find(function(d){ return d.name==='Innovator'; });
+  if (_inv) console.log('[runTest] Innovator stored maxScore:', _inv.maxScore, '→ dimMax:', dimMaxes[_inv.id]);
+
   // Apply formulaTiers (user-written expressions) — highest priority
   secs.forEach(function(sec){
     var fl = sec.formulaLabels || {};
@@ -1654,7 +1670,7 @@ function runTestScores() {
       console.log('[formulaTier] testing tier:', tier.label, 'formula:', tier.formula.substring(0,60));
       secDims.forEach(function(d){
         if (matched[d.id]) return;
-        var result = evalFormula(tier.formula, d.id, scores, secDims);
+        var result = evalFormula(tier.formula, d.id, scores, secDims, dimMaxes);
         console.log('[formulaTier]  dim:', d.name, 'score:', scores[d.id], '→', result);
         if (result) {
           ranks[d.id] = {label:tier.label, description:tier.description||'', recommendation:tier.recommendation||''};
@@ -2075,6 +2091,15 @@ function importJSONObj(obj){
     contactFields:(q.contactFields||[]).map(f=>({id:uid(),...f})),
     options:(q.options||[]).map(o=>({id:uid(),text:o.text||'',scores:Object.fromEntries(Object.entries(o.scores||{}).map(([n,v])=>[dimNameToId[n]||n,v]))})),
   }));
+    // Compute maxScore per dim from questions (IDs guaranteed consistent here)
+  dims.forEach(function(d){
+    var mx=0;
+    qs.forEach(function(q){
+      if(q.type==='ranking'){var mxW=q.positionWeights&&q.positionWeights.length?Math.max.apply(null,q.positionWeights):1;(q.options||[]).forEach(function(o){var s=Number((o.scores||{})[d.id]||0);if(s>0)mx+=s*mxW;});}
+      else if(q.type==='multiple_choice'){var sc=(q.options||[]).map(function(o){return Number((o.scores||{})[d.id]||0);});if(sc.length)mx+=Math.max.apply(null,[0].concat(sc));}
+    });
+    d.maxScore=mx||null;
+  });
   db.assessments.push({id,title:a.title||'Imported Assessment',description:a.description||'',status:a.status||'draft',showResults:a.showResults!==false,brand:{...DB0},webhookUrl:obj.webhookUrl||'',webhookHeaders:obj.webhookHeaders||'{"Content-Type":"application/json"}',createdAt:now()});
   db.questions[id]=qs;db.dimensions[id]=dims;
   if(!db.sections)db.sections={};db.sections[id]=secs;db.responses[id]=[];
