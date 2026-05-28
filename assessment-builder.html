@@ -1728,14 +1728,21 @@ function evalFormula(formula, dimId, scores, dims) {
     return '(' + inner + '/' + dimMax + '*100)';
   });
 
-    expr = expr.replace(/\bMax\(/gi, 'Math.max(');
+  // Replace remaining <DimName> raw score references (after Pct substitution)
+  dims.forEach(function(d) {
+    var re = new RegExp('<' + d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '>', 'gi');
+    expr = expr.replace(re, String(scores[d.id] || 0));
+  });
+  expr = expr.replace(/<self>/gi, String(selfScore));
+
+  // AND / OR support
+  expr = expr.replace(/\bAND\b/gi, '&&').replace(/\bOR\b/gi, '||');
+
+  expr = expr.replace(/\bMax\(/gi, 'Math.max(');
   expr = expr.replace(/\bMin\(/gi, 'Math.min(');
   expr = expr.replace(/\bAvg\(/gi, '__avg(');
   expr = expr.replace(/\bSum\(/gi, '__sum(');
   expr = expr.replace(/\bAbs\(/gi, 'Math.abs(');
-
-  // AND / OR support
-  expr = expr.replace(/\bAND\b/gi, '&&').replace(/\bOR\b/gi, '||');
 
   // Implicit <self>: if expr starts with comparison operator, prepend self score
   if (/^\s*[><!=]/.test(expr)) {
