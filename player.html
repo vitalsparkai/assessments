@@ -129,6 +129,16 @@ async function sbGet(table, params = '') {
   return r.json();
 }
 
+async function sbUpdate(table, query, data) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    method: 'PATCH',
+    headers: _hdrs({ Prefer: 'return=minimal' }),
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) { const t = await r.text(); throw new Error(t); }
+  return true;
+}
+
 async function sbInsert(table, data) {
   const url = `${CFG.supabaseUrl}/rest/v1/${table}`;
   const r = await fetch(url, {
@@ -868,8 +878,23 @@ async function fireWebhook(asm, resp) {
   try {
     const headers = { 'Content-Type': 'application/json' };
     try { if (asm.webhook_headers) Object.assign(headers, JSON.parse(asm.webhook_headers)); } catch {}
-    await fetch(asm.webhook_url, { method: 'POST', headers, body: JSON.stringify(payload) });
-  } catch (e) { console.error('Webhook failed:', e); }
+    const res = await fetch(asm.webhook_url, { method: 'POST', headers, body: JSON.stringify(payload) });
+    if (!res.ok) console.warn('Webhook returned', res.status);
+    // Update webhook status in Supabase
+    if (resp.id) {
+      sbUpdate('ab_responses', `id=eq.${resp.id}`, { webhook_status: 'sent' }).catch(() => {});
+    }
+  } catch (e) {
+    console.error('Webhook failed:', e.message);
+    // If CORS error, try no-cors fallback (fire-and-forget, no response body)
+    if (e.message && (e.message.includes('fetch') || e.message.includes('CORS') || e.message.includes('network'))) {
+      try {
+        await fetch(asm.webhook_url, { method: 'POST', mode: 'no-cors', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        console.log('Webhook sent via no-cors fallback');
+        if (resp.id) sbUpdate('ab_responses', `id=eq.${resp.id}`, { webhook_status: 'sent' }).catch(() => {});
+      } catch (e2) { console.error('Webhook no-cors also failed:', e2.message); }
+    }
+  }
 }
 
 function restart() {
