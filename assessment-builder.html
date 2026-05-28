@@ -1929,18 +1929,23 @@ function svAllFormulas() {
   var secs = gSecs();
   var aId = S.asmId;
   if (!aId) return;
+  var errs = [];
   var saves = secs.map(function(sec){
     if (!db.sections[aId]) db.sections[aId] = [];
     var i = db.sections[aId].findIndex(function(s){ return s.id===sec.id; });
     if (i>=0) db.sections[aId][i]=sec;
-    return sbUpsert('ab_sections', DB.secToDb(sec, aId));
+    var payload = secToDb(sec, aId);
+    console.log('[svAllFormulas] saving section:', sec.title, 'formula_labels:', JSON.stringify(payload.formula_labels));
+    return sbUpsert('ab_sections', payload).catch(function(e){
+      errs.push(sec.title + ': ' + e.message);
+      console.error('[svAllFormulas] error saving', sec.title, e);
+    });
   });
-  Promise.all(saves)
-    .then(function(){
-      sv(); // also update localStorage + trigger debounced sync for everything
-      toast('Formulas saved!');
-    })
-    .catch(function(e){ toast('Save error: '+e.message,'err'); });
+  Promise.all(saves).then(function(){
+    sv();
+    if (errs.length) toast('Save errors: ' + errs.join(' | '), 'err');
+    else toast('Formulas saved!');
+  }).catch(function(e){ toast('Save error: '+e.message,'err'); });
 }
 
 
