@@ -245,6 +245,7 @@ async function loadAll(){
   const asms=await sbGet('ab_assessments',`tenant_id=eq.${_tenantId}&order=created_at.desc`);
   db={assessments:asms.map(dbToAsm),questions:{},dimensions:{},sections:{},responses:{}};
   if(db.sections===undefined)db.sections={};
+  console.log('[loadAll] assessments loaded:',db.assessments.length);
   await Promise.all(asms.map(async a=>{
     const[dims,secs,qs,rs]=await Promise.all([
       sbGet('ab_dimensions',`assessment_id=eq.${a.id}&order=order_index`),
@@ -255,6 +256,8 @@ async function loadAll(){
     db.dimensions[a.id]=dims.map(dbToDim);
     db.sections[a.id]=secs.map(dbToSec);
     db.questions[a.id]=qs.map(dbToQ);
+    console.log(`[loadAll] ${a.title}: ${dims.length} dims, ${secs.length} secs, ${qs.length} qs`);
+    if(secs.length) console.log('[loadAll] first sec formulaLabels:', JSON.stringify(secs[0].formula_labels||secs[0].formulaLabels));
     db.responses[a.id]=rs;
   }));
 }
@@ -276,12 +279,15 @@ async function flushSync(){
 }
 async function syncAsm(aId){
   const asm=db.assessments.find(a=>a.id===aId);if(!asm)return;
+  const errs=[];
+  const safe=p=>p.catch(e=>{errs.push(e.message);console.error('Sync error:',e);});
   await Promise.all([
-    sbUpsert('ab_assessments',asmToDb(asm)),
-    ...((db.dimensions[aId]||[]).map(d=>sbUpsert('ab_dimensions',dimToDb(d,aId)))),
-    ...((db.sections[aId]||[]).map(s=>sbUpsert('ab_sections',secToDb(s,aId)))),
-    ...((db.questions[aId]||[]).map(q=>sbUpsert('ab_questions',qToDb(q,aId)))),
+    safe(sbUpsert('ab_assessments',asmToDb(asm))),
+    ...((db.dimensions[aId]||[]).map(d=>safe(sbUpsert('ab_dimensions',dimToDb(d,aId))))),
+    ...((db.sections[aId]||[]).map(s=>safe(sbUpsert('ab_sections',secToDb(s,aId))))),
+    ...((db.questions[aId]||[]).map(q=>safe(sbUpsert('ab_questions',qToDb(q,aId))))),
   ]);
+  if(errs.length) toast('⚠ Sync errors: '+errs.join(' | '),'err');
 }
 
 /* ── TENANT SETUP ────────────────────────────────────────────────── */
@@ -1095,15 +1101,18 @@ function svSec(){
   s.activeDimIds=Array.from(document.querySelectorAll('#dim-checks input[type=checkbox]:checked')).map(el=>el.value);
   const cf2 = document.getElementById('sec-cf')?.value||'ranges';
   s.classificationFormula = cf2;
-  // Save formula labels
-  const fl2 = {};
+  // Preserve existing formulaLabels — section modal only updates cf/basic fields
+  // Full formula editing happens in the Formulas tab (svAllFormulas)
+  // Only update the basic tier fields if the panel is visible
+  const existingFL = s.formulaLabels || {};
+  const fl2 = {...existingFL};
   const t1=document.getElementById('fl-t1'); if(t1) fl2.tier1=t1.value;
   const t2=document.getElementById('fl-t2'); if(t2) fl2.tier2=t2.value;
   const t3=document.getElementById('fl-t3'); if(t3) fl2.tier3=t3.value;
   const d1=document.getElementById('fl-d1'); if(d1) fl2.delta1=Number(d1.value);
   const d2=document.getElementById('fl-d2'); if(d2) fl2.delta2=Number(d2.value);
   const d3=document.getElementById('fl-d3'); if(d3) fl2.delta3=Number(d3.value);
-  if(Object.keys(fl2).length) s.formulaLabels=fl2;
+  s.formulaLabels = fl2;
   delete s._new;
   if(!db.sections)db.sections={};
   if(!db.sections[S.asmId])db.sections[S.asmId]=[];
@@ -1686,28 +1695,35 @@ function evalFormula(formula, dimId, scores, dims) {
   var byName = {};
   dims.forEach(function(d) { byName[d.name] = scores[d.id] || 0; });
 
-  // Replace <DimName> references (case-insensitive)
-  dims.forEach(function(d) {
-    var re = new RegExp('<' + d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '>', 'gi');
-    expr = expr.replace(re, String(scores[d.id] || 0));
-  });
-  expr = expr.replace(/<self>/gi, String(selfScore));
 
-  // Pct(<val>) = val / maxPossible * 100  — uses the dim's max range as max
+  // Current dim max (for Pct(<self>))
   var dimObj = dims.find(function(d){ return d.id===dimId; });
   var dimMax = dimObj && dimObj.ranges && dimObj.ranges.length
-    ? Math.max.apply(null, dimObj.ranges.map(function(r){ return r.max||0; }))
-    : 100;
+    ? Math.max.apply(null, dimObj.ranges.map(function(r){ return r.max||0; })) : 100;
+
+  // Pct(<DimName>) — each referenced dim uses its OWN max (exact PHP per-dim percentage)
+  dims.forEach(function(d) {
+    var dMax = d.ranges && d.ranges.length
+      ? Math.max.apply(null, d.ranges.map(function(r){ return r.max||0; })) : 100;
+    var sc = rawScores[d.id] || 0;
+    var rePct = new RegExp('Pct\\(<' + d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '>\\)', 'gi');
+    expr = expr.replace(rePct, '(' + sc + '/' + dMax + '*100)');
+  });
+  // Pct(<self>) uses current dim max
+  expr = expr.replace(/Pct\(<self>\)/gi, '(' + selfScore + '/' + dimMax + '*100)');
+  // Any remaining Pct(expr)
   expr = expr.replace(/Pct\(([^)]+)\)/gi, function(_, inner) {
     return '(' + inner + '/' + dimMax + '*100)';
   });
 
-  // Map functions
-  expr = expr.replace(/\bMax\(/gi, 'Math.max(');
+    expr = expr.replace(/\bMax\(/gi, 'Math.max(');
   expr = expr.replace(/\bMin\(/gi, 'Math.min(');
   expr = expr.replace(/\bAvg\(/gi, '__avg(');
   expr = expr.replace(/\bSum\(/gi, '__sum(');
   expr = expr.replace(/\bAbs\(/gi, 'Math.abs(');
+
+  // AND / OR support
+  expr = expr.replace(/\bAND\b/gi, '&&').replace(/\bOR\b/gi, '||');
 
   // Implicit <self>: if expr starts with comparison operator, prepend self score
   if (/^\s*[><!=]/.test(expr)) {
@@ -1919,7 +1935,12 @@ function svAllFormulas() {
     if (i>=0) db.sections[aId][i]=sec;
     return sbUpsert('ab_sections', DB.secToDb(sec, aId));
   });
-  Promise.all(saves).then(function(){ toast('Formulas saved!'); }).catch(function(e){ toast('Save error: '+e.message,'err'); });
+  Promise.all(saves)
+    .then(function(){
+      sv(); // also update localStorage + trigger debounced sync for everything
+      toast('Formulas saved!');
+    })
+    .catch(function(e){ toast('Save error: '+e.message,'err'); });
 }
 
 
