@@ -295,7 +295,8 @@ function mxSc(qs, dId) {
       (q.options||[]).forEach(function(o){ var s=Number((o.scores||{})[dId]||0); if(s>0) m+=s; });
     }
     if (q.type === 'ranking') {
-      var weights = q.positionWeights || [];
+      // Supabase returns snake_case; builder in-memory uses camelCase — support both
+      var weights = q.position_weights || q.positionWeights || [];
       var maxW = weights.length ? Math.max.apply(null, weights) : 1;
       (q.options||[]).forEach(function(o){ var s=Number((o.scores||{})[dId]||0); if(s>0) m+=s*maxW; });
     }
@@ -320,24 +321,14 @@ function classifyAll(rawScores) {
     if (formulaTiers && formulaTiers.length) {
       // Pre-compute max possible score per dim from questions
       const dimMaxes = {};
-      secDimsAll.forEach(d => {
-        const mx = mxSc(QS_ORDERED, d.id);
-        dimMaxes[d.id] = mx || 100;
-        if (sec.title && (sec.title.includes('DISC') || sec.title.includes('Personality'))) {
-          console.log('[classify]', sec.title, d.name, 'score:', rawScores[d.id], 'mxSc:', mx, 'dimMax:', dimMaxes[d.id]);
-        }
-      });
+      secDimsAll.forEach(d => { dimMaxes[d.id] = mxSc(QS_ORDERED, d.id) || 100; });
       // Evaluate tiers in order; first match wins per dimension
       const matched = new Set();
       formulaTiers.forEach(tier => {
         if (!tier.formula || !tier.label) return;
         secDimsAll.forEach(d => {
           if (matched.has(d.id)) return; // already classified by higher-priority tier
-          const result = evalFormula(tier.formula, d.id, rawScores, secDimsAll, dimMaxes);
-          if (sec.title && (sec.title.includes('DISC') || sec.title.includes('Personality'))) {
-            console.log('[classify]', sec.title, d.name, 'tier:', tier.label, 'formula:', tier.formula.substring(0,50), '→', result);
-          }
-          if (result) {
+          if (evalFormula(tier.formula, d.id, rawScores, secDimsAll, dimMaxes)) {
             overrides[d.id] = { label: tier.label, description: tier.description||'', recommendation: tier.recommendation||'' };
             matched.add(d.id);
           }
@@ -345,8 +336,6 @@ function classifyAll(rawScores) {
       });
       return;
     }
-    // Log sections with no formulaTiers
-    if (sec.title) console.log('[classify] NO formulaTiers for section:', sec.title, 'fl keys:', Object.keys(fl));
 
     if (formula === 'ranges') {
       const staticTiers = fl.staticTiers;
