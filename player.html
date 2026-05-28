@@ -305,10 +305,13 @@ function mxSc(qs, dId) {
 function classifyAll(rawScores) {
   const overrides = {};
   if (!S._hiddenDims) S._hiddenDims = new Set();
+  console.log('[classifyAll] SECS count:', (SECS||[]).length);
+  if (SECS && SECS[0]) console.log('[classifyAll] first sec formula_labels:', JSON.stringify(SECS[0].formula_labels), 'formulaLabels:', JSON.stringify(SECS[0].formulaLabels));
 
   (SECS || []).forEach(sec => {
     const formula = sec.classification_formula || sec.classificationFormula || 'ranges';
     const fl = sec.formula_labels || sec.formulaLabels || {};
+    console.log('[classifyAll] sec:', sec.title, 'formula:', formula, 'fl keys:', Object.keys(fl), 'formulaTiers:', fl.formulaTiers&&fl.formulaTiers.length);
     const secDimIds2 = sec.active_dim_ids || sec.activeDimIds || [];
     const secDimsAll = DIMS.filter(d => secDimIds2.includes(d.id));
 
