@@ -1709,7 +1709,7 @@ function evalFormula(formula, dimId, scores, dims) {
   dims.forEach(function(d) {
     var dMax = d.ranges && d.ranges.length
       ? Math.max.apply(null, d.ranges.map(function(r){ return r.max||0; })) : 100;
-    var sc = rawScores[d.id] || 0;
+    var sc = scores[d.id] || 0;
     var rePct = new RegExp('Pct\\(<' + d.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '>\\)', 'gi');
     expr = expr.replace(rePct, '(' + sc + '/' + dMax + '*100)');
   });
