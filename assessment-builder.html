@@ -258,6 +258,8 @@ async function loadAll(){
     db.questions[a.id]=qs.map(dbToQ);
     console.log(`[loadAll] ${a.title}: ${dims.length} dims, ${secs.length} secs, ${qs.length} qs`);
     if(secs.length) console.log('[loadAll] first sec formulaLabels:', JSON.stringify(secs[0].formula_labels||secs[0].formulaLabels));
+    const scoredQs = qs.filter(q => q.type==='ranking' || q.type==='multiple_choice');
+    if(scoredQs.length) { const fq=scoredQs[0]; console.log('[loadAll] first scored q:', fq.title&&fq.title.substring(0,40), 'opts:', (fq.options||[]).length, 'first opt scores:', JSON.stringify(Object.entries((fq.options&&fq.options[0]&&fq.options[0].scores)||{}).slice(0,2))); }
     db.responses[a.id]=rs;
   }));
 }
