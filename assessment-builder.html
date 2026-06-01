@@ -413,20 +413,21 @@ async function flushSync(){
   const ids=[..._syncQueue];_syncQueue.clear();
   for(const aId of ids){if(aId)await syncAsm(aId).catch(e=>console.warn('Sync failed:',e));}
 }
-async function syncAsm(aId){
-  const asm=db.assessments.find(a=>a.id===aId);if(!asm)return;
+async function syncAsm(aId, silent=false){
+  const asm=db.assessments.find(a=>a.id===aId);if(!asm)return [];
   const errs=[];
   const safe=p=>p.catch(e=>{errs.push(e.message);console.error('Sync error:',e);});
-  // IMPORTANT: save assessment row FIRST — dims/sections/questions have FK on assessment_id.
-  // If they arrive before the assessment row exists the FK constraint fails silently.
+  // Assessment row FIRST — children have FK on assessment_id
   await safe(sbUpsert('ab_assessments', asmToDb(asm)));
-  // Now safe to save children in parallel
+  // Children in parallel
   await Promise.all([
     ...((db.dimensions[aId]||[]).map(d=>safe(sbUpsert('ab_dimensions',dimToDb(d,aId))))),
     ...((db.sections[aId]||[]).map(s=>safe(sbUpsert('ab_sections',secToDb(s,aId))))),
     ...((db.questions[aId]||[]).map(q=>safe(sbUpsert('ab_questions',qToDb(q,aId))))),
   ]);
-  if(errs.length) toast('⚠ Sync errors: '+errs.join(' | '),'err');
+  // Only toast if called from normal save (not import — import shows its own summary)
+  if(errs.length && !silent) toast('⚠ Sync errors: '+errs.join(' | '),'err');
+  return errs;
 }
 
 /* ── TENANT SETUP ────────────────────────────────────────────────── */
@@ -1273,7 +1274,7 @@ function rComplete(){
 }
 
 /* ══ MODALS ══ */
-function rMod(){if(!S.modal)return'';const t=S.modal.type;if(t==='new_or_import')return rNewOrImportMod();if(t==='q')return rQMod();if(t==='sec')return rSecMod();if(t==='dim')return rDimMod();if(t==='r')return rRMod();if(t==='folder')return S.folderModal?rFolderModal():'';return '';}
+function rMod(){if(!S.modal)return'';const t=S.modal.type;if(t==='new_or_import')return rNewOrImportMod();if(t==='import_progress')return rImportProgressMod();if(t==='import_result')return rImportResultMod();if(t==='q')return rQMod();if(t==='sec')return rSecMod();if(t==='dim')return rDimMod();if(t==='r')return rRMod();if(t==='folder')return S.folderModal?rFolderModal():'';return '';}
 
 /* ── QUESTION MODAL ── */
 function rQMod(){
@@ -1529,22 +1530,38 @@ async function doNewAsm(){
 
 async function doImportAsms(){
   S.modal=null; render();
-  // Trigger multi-file import
   const inp=document.createElement('input');
   inp.type='file'; inp.accept='.json'; inp.multiple=true;
   inp.onchange=async function(){
     const files=[...inp.files];
-    let ok=0, fail=0;
-    for(const file of files){
+    if(!files.length) return;
+    let ok=0;
+    const errors=[];
+    // Show live progress modal
+    function showProgress(current, total, currentFile){
+      S.modal={type:'import_progress', current, total, currentFile, errors:[...errors]};
+      render();
+    }
+    showProgress(0, files.length, '');
+    for(let i=0;i<files.length;i++){
+      const file=files[i];
+      showProgress(i+1, files.length, file.name);
       try{
         const txt=await file.text();
-        const data=JSON.parse(txt);
+        let data;
+        try{ data=JSON.parse(txt); }
+        catch(e){ throw new Error('Invalid JSON: '+e.message); }
         await importJSONObj(data);
         ok++;
-      }catch(e){ fail++; console.error('Import failed:',file.name,e); }
+      }catch(e){
+        const msg=e.message||String(e);
+        errors.push({file:file.name, error:msg});
+        console.error('Import failed:', file.name, e);
+      }
     }
+    // Show final summary — stays open until dismissed
+    S.modal={type:'import_result', ok, total:files.length, errors};
     render();
-    toast(`Imported ${ok} assessment${ok!==1?'s':''}${fail?' ('+fail+' failed)':''}`);
   };
   inp.click();
 }
@@ -1559,7 +1576,16 @@ async function dlAsm(id){
     await sbDelete('ab_sections',   `assessment_id=eq.${id}`);
     await sbDelete('ab_responses',  `assessment_id=eq.${id}`);
     await sbDelete('ab_assessments',`id=eq.${id}`);
-  } catch(e){ toast('Delete failed: '+e.message,'err'); return; }
+  } catch(e){
+    const msg = e.message||'';
+    if (msg.includes('23503') || msg.includes('foreign key')) {
+      toast('⚠ Delete blocked: run the SQL policy fix in Supabase (see console)','err');
+      console.error('Missing RLS DELETE policy. Run: CREATE POLICY "authenticated delete responses" ON public.ab_responses FOR DELETE TO authenticated USING (true);');
+    } else {
+      toast('Delete failed: '+msg,'err');
+    }
+    return;
+  }
   db.assessments=db.assessments.filter(a=>a.id!==id);
   delete db.questions[id]; delete db.dimensions[id];
   if(db.sections) delete db.sections[id];
@@ -2618,7 +2644,10 @@ async function importJSONObj(obj){
   if(!db.sections)db.sections={};db.sections[id]=secs;db.responses[id]=[];
   // Sync immediately to Supabase (don't wait for sv() which only syncs S.asmId)
   if(_session&&_tenantId){
-    try { await syncAsm(id); } catch(e){ console.error('Import sync failed:',e); }
+    const syncErrs = await syncAsm(id, true); // silent=true, we handle errors in import modal
+    if(syncErrs && syncErrs.length){
+      throw new Error('Sync failed: '+syncErrs.join('; '));
+    }
   }
   return id;
 }
@@ -3088,6 +3117,45 @@ window.addEventListener('beforeunload', function() {
     fetch(url, {method:'DELETE', headers:_hdrs(), keepalive:true}).catch(()=>{});
   }
 });
+
+
+function rImportProgressMod(){
+  const {current,total,currentFile,errors}=S.modal;
+  const pct=total>0?Math.round(current/total*100):0;
+  return '<div class="mov" style="display:flex;align-items:center;justify-content:center">'
+    +'<div style="background:#1e293b;border-radius:12px;padding:28px 32px;min-width:380px;max-width:480px">'
+    +'<h3 style="font-size:16px;font-weight:700;color:#f1f5f9;margin-bottom:18px"><i class="ti ti-upload" style="color:#DDB84E"></i> Importing Assessments...</h3>'
+    +'<div style="background:#0f172a;border-radius:6px;height:8px;margin-bottom:12px;overflow:hidden">'
+    +'<div style="background:#DDB84E;height:100%;border-radius:6px;transition:width .3s;width:'+pct+'%"></div>'
+    +'</div>'
+    +'<div style="font-size:13px;color:#64748b;margin-bottom:8px">'+current+' of '+total+' files</div>'
+    +(currentFile?'<div style="font-size:12px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(currentFile)+'</div>':'')
+    +(errors&&errors.length?'<div style="margin-top:12px;font-size:12px;color:#ef4444"><i class="ti ti-alert-circle"></i> '+errors.length+' error'+(errors.length!==1?'s':'')+' so far</div>':'')
+    +'</div></div>';
+}
+
+function rImportResultMod(){
+  const {ok,total,errors}=S.modal;
+  const allGood=errors.length===0;
+  return '<div class="mov" onclick="if(event.target===this){S.modal=null;render()}" style="display:flex;align-items:center;justify-content:center">'
+    +'<div style="background:#1e293b;border-radius:12px;padding:28px 32px;min-width:380px;max-width:520px">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">'
+    +'<i class="ti '+(allGood?'ti-circle-check" style="font-size:24px;color:#22c55e"':'ti-alert-circle" style="font-size:24px;color:#ef4444"')+' ></i>'
+    +'<h3 style="font-size:16px;font-weight:700;color:#f1f5f9;margin:0">Import '+(allGood?'Complete':'Completed with Errors')+'</h3>'
+    +'</div>'
+    +'<div style="font-size:14px;color:#94a3b8;margin-bottom:16px">'
+    +'<span style="color:#22c55e;font-weight:600">'+ok+'</span> of '+total+' imported successfully'
+    +(errors.length?' &nbsp;·&nbsp; <span style="color:#ef4444;font-weight:600">'+errors.length+'</span> failed':'')
+    +'</div>'
+    +(errors.length?'<div style="background:#0f172a;border-radius:8px;padding:12px;max-height:240px;overflow-y:auto;margin-bottom:16px">'
+      +errors.map(e=>'<div style="padding:8px 0;border-bottom:1px solid #1e293b;last-child:border:none">'
+        +'<div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:3px">'+esc(e.file)+'</div>'
+        +'<div style="font-size:12px;color:#ef4444;word-break:break-word">'+esc(e.error)+'</div>'
+        +'</div>').join('')
+      +'</div>':'')
+    +'<button onclick="S.modal=null;render()" class="btn bp" style="width:100%;padding:10px">Done</button>'
+    +'</div></div>';
+}
 
 </script>
 </body>
