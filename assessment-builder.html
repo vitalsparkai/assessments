@@ -312,8 +312,19 @@ function dbToSec(r){return{id:r.id,aId:r.assessment_id,title:r.title,description
 let db;
 async function loadAll(){
   const asms=await sbGet('ab_assessments',`tenant_id=eq.${_tenantId}&order=created_at.desc`);
-  db={assessments:asms.map(dbToAsm),questions:{},dimensions:{},sections:{},responses:{}};
-  if(db.sections===undefined)db.sections={};
+  db={assessments:asms.map(dbToAsm),questions:{},dimensions:{},sections:{},responses:{},projects:[],folders:{}};
+  // Load projects and folders — catch in case tables don't exist yet
+  try {
+    const [projs, folds] = await Promise.all([
+      sbGet('ab_projects', `owner_id=eq.${_userId}&order=created_at`),
+      sbGet('ab_folders',  `owner_id=eq.${_userId}&order=order_index`),
+    ]);
+    db.projects = projs || [];
+    db.folders  = Array.isArray(folds) ? folds : [];
+    if (!S.projectId && projs && projs.length) S.projectId = projs[0].id;
+  } catch(e) {
+    db.projects = []; db.folders = [];
+  }
   await Promise.all(asms.map(async a=>{
     const[dims,secs,qs,rs]=await Promise.all([
       sbGet('ab_dimensions',`assessment_id=eq.${a.id}&order=order_index`),
@@ -1429,8 +1440,23 @@ async function crtAsm(){
 function edAsm(id){S.asmId=id;S.tab='gen';S.view='ed';render();}
 function vwRes(id){S.asmId=id;S.view='res';render();}
 function prvAsm(id){S.asmId=id;S.preview=true;S.step=0;S.answers={};S.contact={};S.shuffledOrders={};S.view='take';render();}
-async function dlAsm(id){if(!confirm('Delete this assessment and all responses?'))return;db.assessments=db.assessments.filter(a=>a.id!==id);delete db.questions[id];delete db.dimensions[id];if(db.sections)delete db.sections[id];delete db.responses[id];if(S.asmId===id){S.asmId=null;S.view='home';}sv();render();if(_session)sbDel('ab_assessments',id).catch(console.error);}
-function togSt(id){const a=db.assessments.find(a=>a.id===id);if(a){a.status=a.status==='published'?'draft':'published';sv();render();}}
+async function dlAsm(id){
+  if(!confirm('Delete this assessment and all responses?'))return;
+  try {
+    await sbDelete('ab_questions',  `assessment_id=eq.${id}`);
+    await sbDelete('ab_dimensions', `assessment_id=eq.${id}`);
+    await sbDelete('ab_sections',   `assessment_id=eq.${id}`);
+    await sbDelete('ab_responses',  `assessment_id=eq.${id}`);
+    await sbDelete('ab_assessments',`id=eq.${id}`);
+  } catch(e){ toast('Delete failed: '+e.message,'err'); return; }
+  db.assessments=db.assessments.filter(a=>a.id!==id);
+  delete db.questions[id]; delete db.dimensions[id];
+  if(db.sections) delete db.sections[id];
+  delete db.responses[id];
+  if(S.asmId===id){S.asmId=null;S.view='home';}
+  sv(); render();
+}
+async function togSt(id){const a=db.assessments.find(a=>a.id===id);if(!a)return;a.status=a.status==='published'?'draft':'published';try{await sbUpsert('ab_assessments',asmToDb(a));}catch(e){toast('Save failed','err');}sv();render();}
 function svGen(){const a=db.assessments.find(a=>a.id===S.asmId);if(!a)return;a.title=document.getElementById('g-t').value;a.description=document.getElementById('g-d').value;a.status=document.getElementById('g-s').value;a.showResults=document.getElementById('g-sh').checked;a.allowRetakes=document.getElementById('g-rt').checked;sv();toast('Saved!');render();}
 
 /* Sections */
@@ -1581,16 +1607,10 @@ function mvQSec(qId,dir,secId){
 }
 async function dlQ(id){
   if(!confirm('Delete this question?'))return;
-  // Delete from Supabase first (don't rely on sync — sync only upserts, never deletes)
-  try {
-    await sbDelete('ab_questions', `id=eq.${id}`);
-  } catch(e) {
-    toast('Could not delete question: '+e.message,'err');
-    return;
-  }
+  try { await sbDelete('ab_questions', `id=eq.${id}`); }
+  catch(e){ toast('Could not delete question: '+e.message,'err'); return; }
   db.questions[S.asmId]=(db.questions[S.asmId]||[]).filter(q=>q.id!==id);
-  sv();
-  render();
+  sv(); render();
 }
 
 /* Dimensions */
@@ -1601,9 +1621,10 @@ function rmR(i){S.modal.data.ranges.splice(i,1);render();}
 function svDim(){const d={...S.modal.data};d.name=document.getElementById('dm-n')?.value??d.name;d.description=document.getElementById('dm-d')?.value??d.description;d.color=document.getElementById('dm-c')?.value??d.color;delete d._new;if(!db.dimensions[S.asmId])db.dimensions[S.asmId]=[];const dims=db.dimensions[S.asmId];const i=dims.findIndex(x=>x.id===d.id);if(i>=0)dims[i]=d;else{d.orderIndex=dims.length;dims.push(d);}sv();S.modal=null;render();}
 async function dlDim(id){
   if(!confirm('Delete dimension?'))return;
-  try { await sbDelete('ab_dimensions', `id=eq.${id}`); } catch(e){ toast('Could not delete dimension: '+e.message,'err');return; }
+  try { await sbDelete('ab_dimensions', `id=eq.${id}`); }
+  catch(e){ toast('Could not delete dimension: '+e.message,'err'); return; }
   db.dimensions[S.asmId]=(db.dimensions[S.asmId]||[]).filter(d=>d.id!==id);
-  sv();render();
+  sv(); render();
 }
 
 /* Brand */
