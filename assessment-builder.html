@@ -1520,7 +1520,7 @@ async function doNewAsm(){
   sv();S.asmId=id;S.tab='gen';S.view='ed';render();
 }
 
-function doImportAsms(){
+async function doImportAsms(){
   S.modal=null; render();
   // Trigger multi-file import
   const inp=document.createElement('input');
@@ -3015,7 +3015,7 @@ async function acquireLock(asmId) {
   }
 }
 
-function startHeartbeat(asmId) {
+async function startHeartbeat(asmId) {
   stopHeartbeat();
   _heartbeatInt = setInterval(async function() {
     if (!_lockToken || !_lockAsmId) return stopHeartbeat();
