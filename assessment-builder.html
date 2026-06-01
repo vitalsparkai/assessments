@@ -247,6 +247,18 @@ const SUPABASE_URL      = 'https://owouiukkteoentgpbrlk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93b3VpdWtrdGVvZW50Z3BicmxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjQxNzcsImV4cCI6MjA5NTM0MDE3N30.NOPj0iARb1bExfBv2t8KvFktLTisp2OPE95dM_C7TJw';
 const APP_URL           = 'https://assessments.vitalspark.ai';
 </script>
+  <script>
+  // Load instance config (injected by nginx from INSTANCE_ID env var)
+  // Falls back to a hash of the hostname so dev/localhost always has a stable ID
+  (function() {
+    var s = document.createElement('script');
+    s.src = '/config.js';
+    s.onerror = function() {
+      window.VS_INSTANCE_ID = window.location.hostname.replace(/[^a-z0-9]/gi,'_') || 'local';
+    };
+    document.head.appendChild(s);
+  })();
+  </script>
 </head>
 <body>
 <div id="app"></div>
@@ -254,7 +266,12 @@ const APP_URL           = 'https://assessments.vitalspark.ai';
 <script>
 'use strict';
 
-const STORE='ab_v7';
+let STORE='ab_v7'; // re-scoped to tenant after login
+// Instance ID: scopes all data to this specific deployment
+// Set by nginx from INSTANCE_ID env var via /config.js
+function getInstanceId() {
+  return (window.VS_INSTANCE_ID || window.location.hostname.replace(/[^a-z0-9_-]/gi,'_') || 'local');
+}
 const SW=['#2563eb','#7c3aed','#db2777','#dc2626','#ea580c','#d97706','#059669','#0891b2','#0f172a','#334155'];
 const DB0={primaryColor:'#2563eb',bgColor:'#f8fafc',textColor:'#1e293b',surfaceColor:'#ffffff',borderColor:'#e2e8f0',logoUrl:'',fontFamily:'system-ui, sans-serif',btnRadius:'8',cardRadius:'12'};
 const QIC={instruction:'ti-info-circle',contact_form:'ti-user-circle',multiple_choice:'ti-circle-dot',multi_select:'ti-checkbox',ranking:'ti-sort-ascending-2',text:'ti-text-size'};
@@ -311,7 +328,7 @@ async function sbDel(table,id){
 }
 
 /* ── FIELD MAPPING: Builder (camelCase) ↔ Supabase (snake_case) ── */
-function asmToDb(a){return{id:a.id,tenant_id:_tenantId,title:a.title,description:a.description||'',status:a.status||'draft',brand:a.brand||{},webhook_url:a.webhookUrl||'',webhook_headers:a.webhookHeaders||'{"Content-Type":"application/json"}',show_results:a.showResults!==false,allow_retakes:a.allowRetakes!==false,created_at:a.createdAt||now()};} // folder_id/project_id are local-only
+function asmToDb(a){const fid=a.folder_id||null,pid=a.project_id||null;return{id:a.id,tenant_id:_tenantId,instance_id:getInstanceId(),title:a.title,description:a.description||'',status:a.status||'draft',brand:a.brand||{},webhook_url:a.webhookUrl||'',webhook_headers:a.webhookHeaders||'{"Content-Type":"application/json"}',show_results:a.showResults!==false,allow_retakes:a.allowRetakes!==false,created_at:a.createdAt||now(),project_id:pid,folder_id:fid};}
 function dbToAsm(r){return{id:r.id,title:r.title,description:r.description||'',status:r.status||'draft',brand:r.brand||{},webhookUrl:r.webhook_url||'',webhookHeaders:r.webhook_headers||'{"Content-Type":"application/json"}',showResults:r.show_results!==false,allowRetakes:r.allow_retakes!==false,createdAt:r.created_at,folder_id:r.folder_id||null,project_id:r.project_id||null};}
 function qToDb(q,aId){return{id:q.id,assessment_id:aId||q.aId,section_id:q.sectionId||null,type:q.type,title:q.title||'',description:q.description||'',required:q.required!==false,order_index:q.orderIndex||0,position_weights:q.positionWeights||[],contact_fields:q.contactFields||[],options:q.options||[]};}
 function dbToQ(r){return{id:r.id,aId:r.assessment_id,sectionId:r.section_id,type:r.type,title:r.title||'',description:r.description||'',required:r.required!==false,orderIndex:r.order_index||0,positionWeights:r.position_weights||[],contactFields:r.contact_fields||[],options:r.options||[]};}
@@ -324,7 +341,8 @@ function dbToSec(r){return{id:r.id,aId:r.assessment_id,title:r.title,description
 let db;
 async function loadAll(){
   // Core assessments — must succeed
-  const asms = await sbGet('ab_assessments',`tenant_id=eq.${_tenantId}&order=created_at.desc`);
+  const iid = getInstanceId();
+  const asms = await sbGet('ab_assessments',`tenant_id=eq.${_tenantId}&instance_id=eq.${iid}&order=created_at.desc`);
   db = {
     assessments: asms.map(dbToAsm),
     questions:   {},
@@ -335,8 +353,8 @@ async function loadAll(){
     folders:     [],
   };
   // Projects/folders — optional, fail silently
-  db.projects = await sbGet('ab_projects',`owner_id=eq.${_userId||_session?.user?.id}&order=created_at`).catch(()=>[]);
-  db.folders  = await sbGet('ab_folders', `owner_id=eq.${_userId||_session?.user?.id}&order=order_index`).catch(()=>[]);
+  db.projects = await sbGet('ab_projects',`owner_id=eq.${_userId||_session?.user?.id}&instance_id=eq.${iid}&order=created_at`).catch(()=>[]);
+  db.folders  = await sbGet('ab_folders', `owner_id=eq.${_userId||_session?.user?.id}&instance_id=eq.${iid}&order=order_index`).catch(()=>[]);
   if (!Array.isArray(db.projects)) db.projects = [];
   if (!Array.isArray(db.folders))  db.folders  = [];
   // Restore locally-stored projects/folders (they live in localStorage, not Supabase)
@@ -651,11 +669,12 @@ function rFolderModal() {
   </div>`;
 }
 
-function crtProject() {
+async function crtProject() {
   const name = prompt('Project name:');
   if (!name) return;
   const desc = prompt('Description (optional):') || '';
-  const p = {id: uid(), name: name.trim(), description: desc.trim(), created_at: now()};
+  const p = {id: uid(), name: name.trim(), description: desc.trim(), instance_id: getInstanceId(), owner_id: _userId, sort_order: db.projects.length, created_at: now()};
+  try { await sbUpsert('ab_projects', p); } catch(e) { toast('Save failed: '+e.message,'err'); return; }
   db.projects.push(p);
   S.projectId = p.id;
   svLocal(); render();
@@ -687,10 +706,11 @@ async function delProject(id) {
   } catch(e) { toast('Could not delete project: '+e.message,'error'); }
 }
 
-function crtFolder() {
+async function crtFolder() {
   const name = prompt('Folder name:');
   if (!name) return;
-  const f = {id: uid(), name: name.trim(), project_id: S.projectId||null, order_index: db.folders.length, created_at: now()};
+  const f = {id: uid(), name: name.trim(), project_id: S.projectId||null, instance_id: getInstanceId(), owner_id: _userId, sort_order: db.folders.length, created_at: now()};
+  try { await sbUpsert('ab_folders', f); } catch(e) { toast('Save failed: '+e.message,'err'); return; }
   db.folders.push(f);
   S.folderId = f.id;
   svLocal(); render();
@@ -1480,6 +1500,8 @@ function stTab(t){S.tab=t;render();}
 function togSec(id){S.expandedSecs[id]=S.expandedSecs[id]===false?true:false;render();}
 
 async function editAsm(id){
+  const got = await checkoutAsm(id);
+  if (!got) return; // blocked by another user
   S.asmId=id; S.tab='gen'; S.view='ed'; render();
 }
 
@@ -2855,6 +2877,7 @@ async function initAuth(){
       _userId=session.user.id||null;
       try{
         _tenantId=await ensureTenant();
+        STORE='ab_v7_'+_tenantId; // scope cache to tenant
         showLoading();
         await loadAll();
         render();
@@ -2934,6 +2957,126 @@ function dProjDrop(e, id)  {
   db.projects.splice(to,0,item);
   _dragProjId=null; svLocal(); render();
 }
+
+
+// ═══════════════════════════════════════════════════════════════
+// CHECKOUT / LOCK SYSTEM
+// ═══════════════════════════════════════════════════════════════
+let _lockToken    = null;
+let _lockAsmId    = null;
+let _heartbeatInt = null;
+const LOCK_TTL_MIN = 15; // minutes before lock auto-expires
+
+async function acquireLock(asmId) {
+  if (_lockAsmId === asmId) return true; // already have it
+  const token = uid();
+  const now_  = new Date().toISOString();
+  const exp   = new Date(Date.now() + LOCK_TTL_MIN * 60000).toISOString();
+  const name  = _userName || _userEmail || 'Unknown';
+  try {
+    // Try to insert — will fail if locked by someone else whose lock hasn't expired
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/ab_locks`, {
+      method: 'POST',
+      headers: _hdrs({
+        Prefer: 'resolution=merge-duplicates,return=representation',
+        Accept: 'application/json'
+      }),
+      body: JSON.stringify({
+        assessment_id: asmId, locked_by_id: _userId,
+        locked_by_name: name, instance_id: getInstanceId(),
+        lock_token: token, locked_at: now_, expires_at: exp
+      })
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(()=>({}));
+      throw new Error(err.message || 'Lock failed');
+    }
+    const rows = await r.json();
+    const row  = Array.isArray(rows) ? rows[0] : rows;
+    // Confirm WE hold the lock (merge-duplicates returns existing if conflict)
+    if (row && row.locked_by_id !== _userId) {
+      const since = row.locked_at ? new Date(row.locked_at).toLocaleString() : '?';
+      const expdt = row.expires_at ? new Date(row.expires_at) : null;
+      if (expdt && expdt > new Date()) {
+        // Still locked by someone else
+        return { lockedBy: row.locked_by_name || 'Another user', since, expires: expdt.toLocaleString() };
+      }
+      // Their lock expired — force-release and retry
+      await sbDelete('ab_locks', `assessment_id=eq.${asmId}`).catch(()=>{});
+      return acquireLock(asmId);
+    }
+    _lockToken = token;
+    _lockAsmId = asmId;
+    startHeartbeat(asmId);
+    return true;
+  } catch(e) {
+    console.warn('acquireLock error:', e.message);
+    return true; // fail open — don't block editing if lock system is unavailable
+  }
+}
+
+function startHeartbeat(asmId) {
+  stopHeartbeat();
+  _heartbeatInt = setInterval(async function() {
+    if (!_lockToken || !_lockAsmId) return stopHeartbeat();
+    const exp = new Date(Date.now() + LOCK_TTL_MIN * 60000).toISOString();
+    await sbDelete('ab_locks', `assessment_id=eq.${asmId}&lock_token=eq.${_lockToken}`).catch(()=>{});
+    // Re-acquire to refresh expiry
+    const token = uid();
+    const name  = _userName || _userEmail || 'Unknown';
+    await fetch(`${SUPABASE_URL}/rest/v1/ab_locks`, {
+      method: 'POST',
+      headers: _hdrs({Prefer:'resolution=merge-duplicates,return=minimal'}),
+      body: JSON.stringify({
+        assessment_id: asmId, locked_by_id: _userId, locked_by_name: name,
+        instance_id: getInstanceId(), lock_token: token,
+        locked_at: new Date().toISOString(), expires_at: exp
+      })
+    }).then(()=>{ _lockToken = token; }).catch(()=>{});
+  }, 5 * 60 * 1000); // every 5 minutes
+}
+
+function stopHeartbeat() {
+  if (_heartbeatInt) { clearInterval(_heartbeatInt); _heartbeatInt = null; }
+}
+
+async function releaseLock(asmId) {
+  if (!asmId || !_lockToken) return;
+  stopHeartbeat();
+  await sbDelete('ab_locks', `assessment_id=eq.${asmId}&lock_token=eq.${_lockToken}`).catch(()=>{});
+  _lockToken = null; _lockAsmId = null;
+}
+
+async function checkoutAsm(asmId) {
+  const result = await acquireLock(asmId);
+  if (result === true) return true; // got it
+  if (result && result.lockedBy) {
+    // Show who has it
+    const proceed = confirm(
+      `⚠️ This assessment is currently checked out by ${result.lockedBy}\n` +
+      `Since: ${result.since}\n` +
+      `Auto-releases: ${result.expires}\n\n` +
+      `Force check out anyway? (Only do this if they're done editing)`
+    );
+    if (proceed) {
+      await sbDelete('ab_locks', `assessment_id=eq.${asmId}`).catch(()=>{});
+      return acquireLock(asmId);
+    }
+    return false;
+  }
+  return true; // fail open
+}
+
+// Release lock on tab/window close
+window.addEventListener('beforeunload', function() {
+  if (_lockAsmId && _lockToken) {
+    // Synchronous beacon — most reliable for beforeunload
+    const url = `${SUPABASE_URL}/rest/v1/ab_locks?assessment_id=eq.${_lockAsmId}&lock_token=eq.${_lockToken}`;
+    navigator.sendBeacon(url, new Blob([JSON.stringify({_method:'DELETE'})], {type:'application/json'}));
+    // Fallback fetch (may not complete)
+    fetch(url, {method:'DELETE', headers:_hdrs(), keepalive:true}).catch(()=>{});
+  }
+});
 
 </script>
 </body>
