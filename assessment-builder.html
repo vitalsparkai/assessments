@@ -1513,7 +1513,7 @@ function crtAsm(){
 async function doNewAsm(){
   S.modal=null;
   const id=uid();
-  const asm={id,title:'New Assessment',description:'',status:'draft',brand:{...DB0},webhookUrl:'',webhookHeaders:'{"Content-Type":"application/json"}',showResults:true,allowRetakes:true,createdAt:now(),folder_id:null,project_id:S.projectId||null};
+  const asm={id,title:'New Assessment',description:'',status:'draft',brand:{...DB0},webhookUrl:'',webhookHeaders:'{"Content-Type":"application/json"}',showResults:true,allowRetakes:true,createdAt:now(),folder_id:S.folderId&&S.folderId!=="__none__"?S.folderId:null,project_id:S.projectId||null};
   db.assessments.push(asm);db.questions[id]=[];db.dimensions[id]=[];
   if(!db.sections)db.sections={};db.sections[id]=[];db.responses[id]=[];
   if(_session&&_tenantId) await sbUpsert('ab_assessments',asmToDb(asm)).catch(console.error);
@@ -1536,7 +1536,7 @@ async function doImportAsms(){
         ok++;
       }catch(e){ fail++; console.error('Import failed:',file.name,e); }
     }
-    sv(); render();
+    render();
     toast(`Imported ${ok} assessment${ok!==1?'s':''}${fail?' ('+fail+' failed)':''}`);
   };
   inp.click();
@@ -2573,7 +2573,7 @@ function doCopyJSON(asmId){
 }
 
 /* ══ JSON IMPORT ══ */
-function importJSONObj(obj){
+async function importJSONObj(obj){
   const id=uid();
   const a=obj.assessment||{};
   const dimNameToId={};
@@ -2606,10 +2606,14 @@ function importJSONObj(obj){
     });
     d.maxScore=mx||null;
   });
-  db.assessments.push({id,title:a.title||'Imported Assessment',description:a.description||'',status:a.status||'draft',showResults:a.showResults!==false,brand:{...DB0},webhookUrl:obj.webhookUrl||'',webhookHeaders:obj.webhookHeaders||'{"Content-Type":"application/json"}',createdAt:now()});
+  db.assessments.push({id,title:a.title||'Imported Assessment',description:a.description||'',status:a.status||'draft',showResults:a.showResults!==false,allowRetakes:a.allowRetakes!==false,brand:obj.brand||{...DB0},webhookUrl:obj.webhookUrl||'',webhookHeaders:obj.webhookHeaders||'{"Content-Type":"application/json"}',createdAt:now(),folder_id:S.folderId&&S.folderId!=="__none__"?S.folderId:null,project_id:S.projectId||null});
   db.questions[id]=qs;db.dimensions[id]=dims;
   if(!db.sections)db.sections={};db.sections[id]=secs;db.responses[id]=[];
-  sv();return id;
+  // Sync immediately to Supabase (don't wait for sv() which only syncs S.asmId)
+  if(_session&&_tenantId){
+    try { await syncAsm(id); } catch(e){ console.error('Import sync failed:',e); }
+  }
+  return id;
 }
 function doImportJSON(){
   const txt=document.getElementById('json-paste')?.value?.trim();
