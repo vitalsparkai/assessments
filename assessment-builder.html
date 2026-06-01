@@ -339,6 +339,8 @@ async function loadAll(){
   db.folders  = await sbGet('ab_folders', `owner_id=eq.${_userId||_session?.user?.id}&order=order_index`).catch(()=>[]);
   if (!Array.isArray(db.projects)) db.projects = [];
   if (!Array.isArray(db.folders))  db.folders  = [];
+  // Restore locally-stored projects/folders (they live in localStorage, not Supabase)
+  loadLocal();
   // Per-assessment data — each wrapped individually so one bad assessment can't crash all
   await Promise.all(asms.map(async a => {
     try {
@@ -363,6 +365,22 @@ async function loadAll(){
 }
 
 /* ── SYNC TO SUPABASE (debounced background write) ───────────────── */
+function svLocal(){
+  // Save projects+folders to a separate localStorage key (local-only feature)
+  try {
+    localStorage.setItem(STORE+'_pf', JSON.stringify({projects: db.projects||[], folders: db.folders||[]}));
+  } catch(e) {}
+}
+
+function loadLocal(){
+  // Restore projects+folders from localStorage
+  try {
+    const pf = JSON.parse(localStorage.getItem(STORE+'_pf')||'{}');
+    if (Array.isArray(pf.projects)) db.projects = pf.projects;
+    if (Array.isArray(pf.folders))  db.folders  = pf.folders;
+  } catch(e) {}
+}
+
 function sv(){
   // Local backup (instant)
   try{localStorage.setItem(STORE,JSON.stringify(db));}catch{}
@@ -633,16 +651,15 @@ function rFolderModal() {
   </div>`;
 }
 
-async function crtProject() {
+function crtProject() {
   const name = prompt('Project name:');
   if (!name) return;
   const desc = prompt('Description (optional):') || '';
-  try {
-    const p = await sbInsert('ab_projects', {name:name.trim(), description:desc.trim(), owner_id:_userId});
-    db.projects.push(p);
-    S.projectId = p.id;
-    render();
-  } catch(e) { toast('Could not create project: '+e.message,'error'); }
+  const p = {id: uid(), name: name.trim(), description: desc.trim(), created_at: now()};
+  db.projects.push(p);
+  S.projectId = p.id;
+  svLocal(); render();
+  toast('Project created');
 }
 
 async function renameProject(id) {
@@ -670,16 +687,14 @@ async function delProject(id) {
   } catch(e) { toast('Could not delete project: '+e.message,'error'); }
 }
 
-async function crtFolder() {
-  if (!S.projectId) { toast('Select or create a project first','info'); return; }
+function crtFolder() {
   const name = prompt('Folder name:');
   if (!name) return;
-  try {
-    const f = await sbInsert('ab_folders', {name:name.trim(), project_id:S.projectId, owner_id:_userId, order_index:db.folders.length});
-    db.folders.push(f);
-    S.folderId = f.id;
-    render();
-  } catch(e) { toast('Could not create folder: '+e.message,'error'); }
+  const f = {id: uid(), name: name.trim(), project_id: S.projectId||null, order_index: db.folders.length, created_at: now()};
+  db.folders.push(f);
+  S.folderId = f.id;
+  svLocal(); render();
+  toast('Folder created');
 }
 
 async function renameFolder(id) {
@@ -1455,13 +1470,45 @@ function goTo(v,aId){if(aId)S.asmId=aId;S.view=v;render();if(v==='res'&&_session
 function stTab(t){S.tab=t;render();}
 function togSec(id){S.expandedSecs[id]=S.expandedSecs[id]===false?true:false;render();}
 
-async function crtAsm(){
+async function editAsm(id){
+  S.asmId=id; S.tab='gen'; S.view='ed'; render();
+}
+
+function crtAsm(){
+  // Show choice: New or Import
+  S.modal={type:'new_or_import'}; render();
+}
+
+async function doNewAsm(){
+  S.modal=null;
   const id=uid();
-  const asm={id,title:'New Assessment',description:'',status:'draft',brand:{...DB0},webhookUrl:'',webhookHeaders:'{"Content-Type":"application/json"}',showResults:true,createdAt:now()};
+  const asm={id,title:'New Assessment',description:'',status:'draft',brand:{...DB0},webhookUrl:'',webhookHeaders:'{"Content-Type":"application/json"}',showResults:true,allowRetakes:true,createdAt:now(),folder_id:null,project_id:S.projectId||null};
   db.assessments.push(asm);db.questions[id]=[];db.dimensions[id]=[];
   if(!db.sections)db.sections={};db.sections[id]=[];db.responses[id]=[];
-  if(_session&&_tenantId)await sbUpsert('ab_assessments',asmToDb(asm)).catch(console.error);
+  if(_session&&_tenantId) await sbUpsert('ab_assessments',asmToDb(asm)).catch(console.error);
   sv();S.asmId=id;S.tab='gen';S.view='ed';render();
+}
+
+function doImportAsms(){
+  S.modal=null; render();
+  // Trigger multi-file import
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='.json'; inp.multiple=true;
+  inp.onchange=async function(){
+    const files=[...inp.files];
+    let ok=0, fail=0;
+    for(const file of files){
+      try{
+        const txt=await file.text();
+        const data=JSON.parse(txt);
+        await importJSONObj(data);
+        ok++;
+      }catch(e){ fail++; console.error('Import failed:',file.name,e); }
+    }
+    sv(); render();
+    toast(`Imported ${ok} assessment${ok!==1?'s':''}${fail?' ('+fail+' failed)':''}`);
+  };
+  inp.click();
 }
 function edAsm(id){S.asmId=id;S.tab='gen';S.view='ed';render();}
 function vwRes(id){S.asmId=id;S.view='res';render();}
@@ -2852,4 +2899,5 @@ initAuth();
   return true;
 }
 
->
+if(S.modal.type==='new_or_import') return `<div class='mov' onclick='if(event.target===this){S.modal=null;render()}'"><div style="background:#1e293b;border-radius:12px;padding:28px;min-width:320px;max-width:420px;text-align:center"><h3 style="font-size:18px;font-weight:700;margin-bottom:20px;color:#f1f5f9">Add Assessment</h3><div style="display:flex;flex-direction:column;gap:12px"><button onclick="doNewAsm()" class="btn bp" style="padding:16px;font-size:15px;border-radius:8px"><i class="ti ti-plus"></i>&nbsp; Create New Assessment</button><button onclick="doImportAsms()" class="btn" style="padding:16px;font-size:15px;border-radius:8px;background:#334155;color:#e2e8f0;border:1px solid #475569"><i class="ti ti-upload"></i>&nbsp; Import from JSON<br><small style="font-weight:400;opacity:.7">Select one or multiple files</small></button></div><button onclick="S.modal=null;render()" style="margin-top:16px;background:transparent;border:none;color:#64748b;cursor:pointer;font-family:inherit;font-size:13px">Cancel</button></div></div>\`;
+  >
