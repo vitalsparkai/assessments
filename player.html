@@ -78,6 +78,19 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;min-heigh
 .toast{position:fixed;top:16px;right:16px;z-index:9999;padding:11px 15px;border-radius:9px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:7px;box-shadow:0 6px 20px rgba(0,0,0,.14);animation:tslide .2s ease}
 .tok{background:#022c22;color:#34d399}.terr{background:#450a0a;color:#f87171}
 @keyframes tslide{from{transform:translateX(50px);opacity:0}to{transform:none;opacity:1}}
+
+/* ── MOBILE ───────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .vs-wrap, .container, .q-wrap { padding: 12px !important; }
+  .btn, button[class*="btn"] { min-height: 44px; font-size: 15px; }
+  input, select, textarea { font-size: 16px !important; } /* prevents iOS zoom */
+  .opt-card, .rank-card { padding: 12px 14px !important; }
+  .opt-label { font-size: 14px !important; }
+  h2, .q-title { font-size: 17px !important; line-height: 1.35 !important; }
+  .prog-bar-wrap { margin: 0 0 14px !important; }
+}
+button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+input, textarea { -webkit-appearance: none; border-radius: 0; }
 </style>
 </head>
 <body>
@@ -112,6 +125,10 @@ const pathMatch = window.location.pathname.match(/\/a\/([^/?#]+)/);
 const ASM_ID    = pathMatch?.[1] || QPS.get('id') || '';
 const IS_EMBED  = QPS.get('embed') === '1';
 const REDIRECT  = QPS.get('redirect') || '';
+// Pre-fill contact from URL params (set by host page from logged-in user session)
+const URL_EMAIL  = QPS.get('email')  || '';
+const URL_NAME   = QPS.get('name')   || '';
+const URL_USERID = QPS.get('userid') || '';
 
 // ═══════════════════════════════════════════════════════════════════
 // SUPABASE REST HELPERS
@@ -475,16 +492,33 @@ function maxScore(dimId) {
 // ═══════════════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════════════
-const S = { step: 0, answers: {}, contact: {}, submitted: false, shuffledOrders: {}, _hiddenDims: new Set() };
+// Pre-populate contact from URL params if provided by host page
+const _urlContact = {};
+if (URL_EMAIL)  _urlContact['Email'] = URL_EMAIL;
+if (URL_NAME)   { _urlContact['First Name'] = URL_NAME.split(' ')[0]; _urlContact['Last Name'] = URL_NAME.split(' ').slice(1).join(' '); }
+if (URL_USERID) _urlContact['User ID'] = URL_USERID;
+
+const S = { step: 0, answers: {}, contact: {..._urlContact}, submitted: false, shuffledOrders: {}, _hiddenDims: new Set() };
 let _drag = null;
 
 // ═══════════════════════════════════════════════════════════════════
 // EMBED COMMUNICATION
 // ═══════════════════════════════════════════════════════════════════
+var _lastSentH = 0;
+var _resizeTimer = null;
 function notifyResize() {
   if (!IS_EMBED) return;
-  const h = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
-  window.parent.postMessage({ type: 'vs:resize', height: h, assessmentId: ASM_ID }, '*');
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(function() {
+    // Measure the inner content wrapper, not document (which includes iframe padding)
+    var inner = document.getElementById('vs-inner') || document.querySelector('.vs-wrap') || document.body;
+    var h = inner.getBoundingClientRect().height || inner.offsetHeight;
+    // Only send if content grew by more than 20px — never shrinks (prevents loop)
+    if (h > _lastSentH + 20) {
+      _lastSentH = h;
+      window.parent.postMessage({ type: 'vs:resize', height: h, assessmentId: ASM_ID }, '*');
+    }
+  }, 150); // debounce 150ms
 }
 
 function notifyComplete() {
@@ -824,11 +858,17 @@ async function submitAssessment() {
   S._scores = scores; S._ranks = finalRanks; S._tiedTop = tiedTop;
 
   // Build response record
+  // Merge URL-injected identity into contact (URL params win for email/userid)
+  const contactData = { ...S.contact };
+  if (URL_EMAIL)  contactData['Email'] = URL_EMAIL;
+  if (URL_NAME && !contactData['First Name'])   { contactData['First Name'] = URL_NAME.split(' ')[0]; contactData['Last Name'] = URL_NAME.split(' ').slice(1).join(' '); }
+  if (URL_USERID) contactData['userId'] = URL_USERID;
+
   const response = {
     assessment_id:  ASM.id,
     tenant_id:      ASM.tenant_id || null,
     team_code:      S.contact['Team Code (Optional):'] || null,
-    contact:        { ...S.contact },
+    contact:        contactData,
     answers:        { ...S.answers },
     scores:         Object.fromEntries(DIMS.map(d => [d.name, scores[d.id] || 0])),
     ranks:          Object.fromEntries(DIMS.map(d => {
@@ -938,8 +978,12 @@ if (!CFG.supabaseUrl || !CFG.supabaseKey) {
 
 // Notify parent on resize events (for dynamic content)
 if (IS_EMBED) {
-  const ro = new ResizeObserver(() => notifyResize());
-  ro.observe(document.body);
+  // Use MutationObserver instead of ResizeObserver to avoid resize feedback loop.
+  // Only fires when DOM content actually changes (question render), not on height change.
+  const mo = new MutationObserver(function() { notifyResize(); });
+  mo.observe(document.body, { childList: true, subtree: true });
+  // Also fire once on load
+  window.addEventListener('load', function() { setTimeout(notifyResize, 200); });
 }
 </script>
 </body>
