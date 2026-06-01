@@ -288,6 +288,18 @@ async function sbUpsert(table,data){
   const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}`,{method:'POST',headers:_hdrs({Prefer:'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify(data)});
   if(!r.ok){const e=await r.text();throw new Error(`UPSERT ${table} ${r.status}: ${e}`);}
 }
+
+async function sbInsert(table,data){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}`,{method:'POST',headers:_hdrs({Prefer:'return=representation',Accept:'application/json'}),body:JSON.stringify(data)});
+  if(!r.ok){const e=await r.text();throw new Error(`INSERT ${table} ${r.status}: ${e}`);}
+  const rows=await r.json();
+  return Array.isArray(rows)?rows[0]:rows;
+}
+
+async function sbUpdate(table,query,data){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`,{method:'PATCH',headers:_hdrs({Prefer:'return=minimal'}),body:JSON.stringify(data)});
+  if(!r.ok){const e=await r.text();throw new Error(`UPDATE ${table} ${r.status}: ${e}`);}
+}
 async function sbUpsertReturn(table,data){
   const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}`,{method:'POST',headers:_hdrs({Prefer:'resolution=merge-duplicates,return=representation'}),body:JSON.stringify(data)});
   if(!r.ok){const e=await r.text();throw new Error(`UPSERT ${table} ${r.status}: ${e}`);}
@@ -312,19 +324,12 @@ function dbToSec(r){return{id:r.id,aId:r.assessment_id,title:r.title,description
 let db;
 async function loadAll(){
   const asms=await sbGet('ab_assessments',`tenant_id=eq.${_tenantId}&order=created_at.desc`);
-  db={assessments:asms.map(dbToAsm),questions:{},dimensions:{},sections:{},responses:{},projects:[],folders:{}};
-  // Load projects and folders — catch in case tables don't exist yet
-  try {
-    const [projs, folds] = await Promise.all([
-      sbGet('ab_projects', `owner_id=eq.${_userId}&order=created_at`),
-      sbGet('ab_folders',  `owner_id=eq.${_userId}&order=order_index`),
-    ]);
-    db.projects = projs || [];
-    db.folders  = Array.isArray(folds) ? folds : [];
-    if (!S.projectId && projs && projs.length) S.projectId = projs[0].id;
-  } catch(e) {
-    db.projects = []; db.folders = [];
-  }
+  db={assessments:asms.map(dbToAsm),questions:{},dimensions:{},sections:{},responses:{},projects:[],folders:[]};
+  // Load projects/folders — silent fallback if tables don't exist
+  db.projects = await sbGet('ab_projects', `owner_id=eq.${_userId}&order=created_at`).catch(()=>[]);
+  db.folders  = await sbGet('ab_folders',  `owner_id=eq.${_userId}&order=order_index`).catch(()=>[]);
+  if (!Array.isArray(db.projects)) db.projects = [];
+  if (!Array.isArray(db.folders))  db.folders  = [];
   await Promise.all(asms.map(async a=>{
     const[dims,secs,qs,rs]=await Promise.all([
       sbGet('ab_dimensions',`assessment_id=eq.${a.id}&order=order_index`),
