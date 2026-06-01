@@ -328,7 +328,14 @@ async function sbDel(table,id){
 }
 
 /* ── FIELD MAPPING: Builder (camelCase) ↔ Supabase (snake_case) ── */
-function asmToDb(a){const fid=a.folder_id||null,pid=a.project_id||null;return{id:a.id,tenant_id:_tenantId,instance_id:getInstanceId(),title:a.title,description:a.description||'',status:a.status||'draft',brand:a.brand||{},webhook_url:a.webhookUrl||'',webhook_headers:a.webhookHeaders||'{"Content-Type":"application/json"}',show_results:a.showResults!==false,allow_retakes:a.allowRetakes!==false,created_at:a.createdAt||now(),project_id:pid,folder_id:fid};}
+function asmToDb(a){
+  // Only include project_id/folder_id if they exist in Supabase-synced lists
+  // Prevents FK errors from stale localStorage-only IDs
+  const knownProjects=new Set((db.projects||[]).map(p=>p.id));
+  const knownFolders=new Set((db.folders||[]).map(f=>f.id));
+  const pid=a.project_id&&knownProjects.has(a.project_id)?a.project_id:null;
+  const fid=a.folder_id&&knownFolders.has(a.folder_id)?a.folder_id:null;
+  return{id:a.id,tenant_id:_tenantId,instance_id:getInstanceId(),title:a.title,description:a.description||'',status:a.status||'draft',brand:a.brand||{},webhook_url:a.webhookUrl||'',webhook_headers:a.webhookHeaders||'{"Content-Type":"application/json"}',show_results:a.showResults!==false,allow_retakes:a.allowRetakes!==false,created_at:a.createdAt||now(),project_id:pid,folder_id:fid};}
 function dbToAsm(r){return{id:r.id,title:r.title,description:r.description||'',status:r.status||'draft',brand:r.brand||{},webhookUrl:r.webhook_url||'',webhookHeaders:r.webhook_headers||'{"Content-Type":"application/json"}',showResults:r.show_results!==false,allowRetakes:r.allow_retakes!==false,createdAt:r.created_at,folder_id:r.folder_id||null,project_id:r.project_id||null};}
 function qToDb(q,aId){return{id:q.id,assessment_id:aId||q.aId,section_id:q.sectionId||null,type:q.type,title:q.title||'',description:q.description||'',required:q.required!==false,order_index:q.orderIndex||0,position_weights:q.positionWeights||[],contact_fields:q.contactFields||[],options:q.options||[]};}
 function dbToQ(r){return{id:r.id,aId:r.assessment_id,sectionId:r.section_id,type:r.type,title:r.title||'',description:r.description||'',required:r.required!==false,orderIndex:r.order_index||0,positionWeights:r.position_weights||[],contactFields:r.contact_fields||[],options:r.options||[]};}
@@ -417,15 +424,17 @@ async function syncAsm(aId, silent=false){
   const asm=db.assessments.find(a=>a.id===aId);if(!asm)return [];
   const errs=[];
   const safe=p=>p.catch(e=>{errs.push(e.message);console.error('Sync error:',e);});
-  // Assessment row FIRST — children have FK on assessment_id
+  // Phase 1: assessment row first (questions/dims/secs all FK to this)
   await safe(sbUpsert('ab_assessments', asmToDb(asm)));
-  // Children in parallel
+  // Phase 2: dimensions + sections in parallel (no FK between them)
   await Promise.all([
     ...((db.dimensions[aId]||[]).map(d=>safe(sbUpsert('ab_dimensions',dimToDb(d,aId))))),
     ...((db.sections[aId]||[]).map(s=>safe(sbUpsert('ab_sections',secToDb(s,aId))))),
+  ]);
+  // Phase 3: questions last — they FK to sections, so sections must exist first
+  await Promise.all([
     ...((db.questions[aId]||[]).map(q=>safe(sbUpsert('ab_questions',qToDb(q,aId))))),
   ]);
-  // Only toast if called from normal save (not import — import shows its own summary)
   if(errs.length && !silent) toast('⚠ Sync errors: '+errs.join(' | '),'err');
   return errs;
 }
@@ -1571,10 +1580,15 @@ function prvAsm(id){S.asmId=id;S.preview=true;S.step=0;S.answers={};S.contact={}
 async function dlAsm(id){
   if(!confirm('Delete this assessment and all responses?'))return;
   try {
+    // Questions first — they FK to sections (SET NULL but safer to delete explicitly)
     await sbDelete('ab_questions',  `assessment_id=eq.${id}`);
-    await sbDelete('ab_dimensions', `assessment_id=eq.${id}`);
-    await sbDelete('ab_sections',   `assessment_id=eq.${id}`);
-    await sbDelete('ab_responses',  `assessment_id=eq.${id}`);
+    // Dims, sections, responses in parallel — no deps between them
+    await Promise.all([
+      sbDelete('ab_dimensions', `assessment_id=eq.${id}`),
+      sbDelete('ab_sections',   `assessment_id=eq.${id}`),
+      sbDelete('ab_responses',  `assessment_id=eq.${id}`),
+    ]);
+    // Assessment last
     await sbDelete('ab_assessments',`id=eq.${id}`);
   } catch(e){
     const msg = e.message||'';
