@@ -773,19 +773,25 @@ document.addEventListener('dragover', function(e){
   const fc = e.target.closest('.fcard');
   if (fc && _dragAsmId) { e.preventDefault(); fc.classList.add('drag-over'); }
 });
-document.addEventListener('drop', async function(e){
+document.addEventListener('drop', function(e){
+  // Drop assessment onto folder card
   const fc = e.target.closest('.fcard');
-  if (!fc || !_dragAsmId) return;
-  const folderId = fc.dataset.folderId;
-  if (!folderId) return;
-  e.preventDefault();
-  const asm = db.assessments.find(a=>a.id===_dragAsmId);
-  if (!asm) return;
-  try {
-    await sbUpdate('ab_assessments', `id=eq.${_dragAsmId}`, {folder_id:folderId, project_id:S.projectId||null});
-    asm.folder_id=folderId; asm.project_id=S.projectId||null;
-    _dragAsmId=null; render(); toast('Moved to folder','success');
-  } catch(e2){ toast('Drop failed','error'); }
+  if (fc && _dragAsmId) {
+    const folderId = fc.dataset.folderId;
+    if (folderId) {
+      e.preventDefault();
+      const asm = db.assessments.find(a=>a.id===_dragAsmId);
+      if (asm) {
+        asm.folder_id  = folderId;
+        asm.project_id = S.projectId||null;
+        _dragAsmId = null;
+        svLocal(); sv();
+        render(); toast('Moved to folder');
+      }
+    }
+  }
+  // Remove all drag-over highlights
+  document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
 });
 
 function render(){
@@ -810,10 +816,13 @@ function render(){
         </div>
         ${(db.projects||[]).map(p=>`
         <div class="pj-item ${S.projectId===p.id?'on':''}"
+          draggable="true"
+          ondragstart="dProjStart(event,'${p.id}')"
           ondragover="event.preventDefault();this.classList.add('drag-over')"
           ondragleave="this.classList.remove('drag-over')"
-          ondrop="event.preventDefault();this.classList.remove('drag-over');dropAsmInProject(event,'${p.id}')">
-          <span onclick="S.projectId='${p.id}';S.folderId=null;goTo('home')" style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
+          ondrop="event.preventDefault();this.classList.remove('drag-over');dropAsmInProject(event,'${p.id}');dProjDrop(event,'${p.id}')">
+          <i class="ti ti-grip-vertical" style="opacity:.35;flex-shrink:0;cursor:grab"></i>
+          <span onclick="S.projectId='${p.id}';S.folderId=null;goTo('home')" style="flex:1;display:flex;align-items:center;gap:5px;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">
             <i class="ti ti-briefcase"></i> ${esc(p.name)}
           </span>
           <span class="pj-actions">
@@ -1241,7 +1250,7 @@ function rComplete(){
 }
 
 /* ══ MODALS ══ */
-function rMod(){if(!S.modal)return'';const t=S.modal.type;if(t==='q')return rQMod();if(t==='sec')return rSecMod();if(t==='dim')return rDimMod();if(t==='r')return rRMod();return'';}
+function rMod(){if(!S.modal)return'';const t=S.modal.type;if(t==='new_or_import')return rNewOrImportMod();if(t==='q')return rQMod();if(t==='sec')return rSecMod();if(t==='dim')return rDimMod();if(t==='r')return rRMod();if(t==='folder')return S.folderModal?rFolderModal():'';return '';}
 
 /* ── QUESTION MODAL ── */
 function rQMod(){
@@ -2889,15 +2898,43 @@ function showLoading(){
 
 
 initAuth();
-</script>
-</body>
-</htmlasync function sbDelete(table, query) {
+
+async function sbDelete(table, query) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
-    method: 'DELETE', headers: _hdrs({ Prefer: 'return=minimal' })
+    method: 'DELETE', headers: _hdrs({Prefer:'return=minimal'})
   });
   if (!r.ok) { const t = await r.text(); throw new Error(t); }
   return true;
 }
 
-if(S.modal.type==='new_or_import') return `<div class='mov' onclick='if(event.target===this){S.modal=null;render()}'"><div style="background:#1e293b;border-radius:12px;padding:28px;min-width:320px;max-width:420px;text-align:center"><h3 style="font-size:18px;font-weight:700;margin-bottom:20px;color:#f1f5f9">Add Assessment</h3><div style="display:flex;flex-direction:column;gap:12px"><button onclick="doNewAsm()" class="btn bp" style="padding:16px;font-size:15px;border-radius:8px"><i class="ti ti-plus"></i>&nbsp; Create New Assessment</button><button onclick="doImportAsms()" class="btn" style="padding:16px;font-size:15px;border-radius:8px;background:#334155;color:#e2e8f0;border:1px solid #475569"><i class="ti ti-upload"></i>&nbsp; Import from JSON<br><small style="font-weight:400;opacity:.7">Select one or multiple files</small></button></div><button onclick="S.modal=null;render()" style="margin-top:16px;background:transparent;border:none;color:#64748b;cursor:pointer;font-family:inherit;font-size:13px">Cancel</button></div></div>\`;
-  >
+function rNewOrImportMod(){
+  return '<div class="mov" onclick="if(event.target===this){S.modal=null;render()}" style="display:flex;align-items:center;justify-content:center;z-index:1000">'
+    + '<div style="background:#1e293b;border-radius:14px;padding:32px 28px;width:360px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    + '<h3 style="font-size:18px;font-weight:700;margin-bottom:8px;color:#f1f5f9">Add Assessment</h3>'
+    + '<p style="font-size:13px;color:#64748b;margin-bottom:24px">Create a blank assessment or import from JSON</p>'
+    + '<div style="display:flex;flex-direction:column;gap:10px">'
+    + '<button onclick="doNewAsm()" class="btn bp" style="padding:14px 20px;font-size:14px;border-radius:8px;width:100%"><i class="ti ti-plus"></i>  Create New Assessment</button>'
+    + '<button onclick="doImportAsms()" class="btn" style="padding:14px 20px;font-size:14px;border-radius:8px;width:100%;background:#334155;border:1px solid #475569;color:#e2e8f0"><i class="ti ti-upload"></i>  Import from JSON<br><small style="opacity:.6;font-weight:400">Select one or multiple .json files</small></button>'
+    + '</div>'
+    + '<button onclick="S.modal=null;render()" style="margin-top:18px;background:transparent;border:none;color:#475569;cursor:pointer;font-family:inherit;font-size:13px">Cancel</button>'
+    + '</div></div>';
+}
+
+// Project reordering via drag-drop in sidebar
+let _dragProjId = null;
+function dProjStart(e, id) { _dragProjId = id; e.dataTransfer.effectAllowed = 'move'; }
+function dProjOver(e, id)  { e.preventDefault(); }
+function dProjDrop(e, id)  {
+  e.preventDefault();
+  if (!_dragProjId || _dragProjId === id) { _dragProjId=null; return; }
+  const from = db.projects.findIndex(p=>p.id===_dragProjId);
+  const to   = db.projects.findIndex(p=>p.id===id);
+  if (from<0||to<0) { _dragProjId=null; return; }
+  const [item] = db.projects.splice(from,1);
+  db.projects.splice(to,0,item);
+  _dragProjId=null; svLocal(); render();
+}
+
+</script>
+</body>
+</html>
