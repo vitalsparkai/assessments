@@ -273,7 +273,7 @@ const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 
 /* ══ DB ══ */
 /* ── AUTH STATE ─────────────────────────────────────────────────── */
-let _sb=null,_session=null,_tenantId=null,_userEmail='',_userName='';
+let _sb=null,_session=null,_tenantId=null,_userEmail='',_userName='',_userId=null;
 let _syncTimer=null,_syncQueue=new Set();
 
 /* ── SUPABASE HELPERS ────────────────────────────────────────────── */
@@ -335,8 +335,8 @@ async function loadAll(){
     folders:     [],
   };
   // Projects/folders — optional, fail silently
-  db.projects = await sbGet('ab_projects',`owner_id=eq.${_userId}&order=created_at`).catch(()=>[]);
-  db.folders  = await sbGet('ab_folders', `owner_id=eq.${_userId}&order=order_index`).catch(()=>[]);
+  db.projects = await sbGet('ab_projects',`owner_id=eq.${_userId||_session?.user?.id}&order=created_at`).catch(()=>[]);
+  db.folders  = await sbGet('ab_folders', `owner_id=eq.${_userId||_session?.user?.id}&order=order_index`).catch(()=>[]);
   if (!Array.isArray(db.projects)) db.projects = [];
   if (!Array.isArray(db.folders))  db.folders  = [];
   // Per-assessment data — each wrapped individually so one bad assessment can't crash all
