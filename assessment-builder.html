@@ -323,24 +323,42 @@ function dbToSec(r){return{id:r.id,aId:r.assessment_id,title:r.title,description
 /* ── DB LOAD ─────────────────────────────────────────────────────── */
 let db;
 async function loadAll(){
-  const asms=await sbGet('ab_assessments',`tenant_id=eq.${_tenantId}&order=created_at.desc`);
-  db={assessments:asms.map(dbToAsm),questions:{},dimensions:{},sections:{},responses:{},projects:[],folders:[]};
-  // Load projects/folders — silent fallback if tables don't exist
-  db.projects = await sbGet('ab_projects', `owner_id=eq.${_userId}&order=created_at`).catch(()=>[]);
-  db.folders  = await sbGet('ab_folders',  `owner_id=eq.${_userId}&order=order_index`).catch(()=>[]);
+  // Core assessments — must succeed
+  const asms = await sbGet('ab_assessments',`tenant_id=eq.${_tenantId}&order=created_at.desc`);
+  db = {
+    assessments: asms.map(dbToAsm),
+    questions:   {},
+    dimensions:  {},
+    sections:    {},
+    responses:   {},
+    projects:    [],
+    folders:     [],
+  };
+  // Projects/folders — optional, fail silently
+  db.projects = await sbGet('ab_projects',`owner_id=eq.${_userId}&order=created_at`).catch(()=>[]);
+  db.folders  = await sbGet('ab_folders', `owner_id=eq.${_userId}&order=order_index`).catch(()=>[]);
   if (!Array.isArray(db.projects)) db.projects = [];
   if (!Array.isArray(db.folders))  db.folders  = [];
-  await Promise.all(asms.map(async a=>{
-    const[dims,secs,qs,rs]=await Promise.all([
-      sbGet('ab_dimensions',`assessment_id=eq.${a.id}&order=order_index`),
-      sbGet('ab_sections',  `assessment_id=eq.${a.id}&order=order_index`),
-      sbGet('ab_questions', `assessment_id=eq.${a.id}&order=order_index`),
-      sbGet('ab_responses', `assessment_id=eq.${a.id}&order=created_at.desc&limit=500`),
-    ]);
-    db.dimensions[a.id]=dims.map(dbToDim);
-    db.sections[a.id]=secs.map(dbToSec);
-    db.questions[a.id]=qs.map(dbToQ);
-    db.responses[a.id]=rs;
+  // Per-assessment data — each wrapped individually so one bad assessment can't crash all
+  await Promise.all(asms.map(async a => {
+    try {
+      const [dims, secs, qs, rs] = await Promise.all([
+        sbGet('ab_dimensions',`assessment_id=eq.${a.id}&order=order_index`),
+        sbGet('ab_sections',  `assessment_id=eq.${a.id}&order=order_index`),
+        sbGet('ab_questions', `assessment_id=eq.${a.id}&order=order_index`),
+        sbGet('ab_responses', `assessment_id=eq.${a.id}&order=created_at.desc&limit=500`),
+      ]);
+      db.dimensions[a.id] = (dims||[]).map(dbToDim);
+      db.sections[a.id]   = (secs||[]).map(dbToSec);
+      db.questions[a.id]  = (qs||[]).map(dbToQ);
+      db.responses[a.id]  = rs||[];
+    } catch(e) {
+      console.warn(`Failed to load data for assessment ${a.id}:`, e.message);
+      db.dimensions[a.id] = [];
+      db.sections[a.id]   = [];
+      db.questions[a.id]  = [];
+      db.responses[a.id]  = [];
+    }
   }));
 }
 
@@ -803,6 +821,9 @@ function render(){
 
 /* ══ HOME ══ */
 function rHome(){
+  if (!db || !db.assessments) return '<div style="padding:40px;text-align:center;color:#64748b">Loading...</div>';
+  if (!Array.isArray(db.projects)) db.projects = [];
+  if (!Array.isArray(db.folders))  db.folders  = [];
   const curProject = db.projects.find(p=>p.id===S.projectId)||null;
   const folders = db.folders.filter(f=>f.project_id===S.projectId);
   // Assessments in this project
@@ -2806,7 +2827,10 @@ async function initAuth(){
       showLoading();
       await loadAll();
       render();
-    }catch(e){console.error('Initial load error:',e);}
+    }catch(e){
+      console.error('Initial load error:',e);
+      document.getElementById('app').innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-family:system-ui,sans-serif;color:#64748b;text-align:center;padding:40px"><i class="ti ti-alert-circle" style="font-size:40px;color:#ef4444"></i><h2 style="color:#1e293b;font-size:18px">Failed to load</h2><p style="font-size:14px;max-width:400px">${e.message}</p><button onclick="location.reload()" style="margin-top:8px;padding:8px 18px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit">Reload</button></div>`;
+    }
   }else if(!window.location.pathname.includes('callback')){
     document.getElementById('app').innerHTML=rLogin();
   }
