@@ -417,8 +417,11 @@ async function syncAsm(aId){
   const asm=db.assessments.find(a=>a.id===aId);if(!asm)return;
   const errs=[];
   const safe=p=>p.catch(e=>{errs.push(e.message);console.error('Sync error:',e);});
+  // IMPORTANT: save assessment row FIRST — dims/sections/questions have FK on assessment_id.
+  // If they arrive before the assessment row exists the FK constraint fails silently.
+  await safe(sbUpsert('ab_assessments', asmToDb(asm)));
+  // Now safe to save children in parallel
   await Promise.all([
-    safe(sbUpsert('ab_assessments',asmToDb(asm))),
     ...((db.dimensions[aId]||[]).map(d=>safe(sbUpsert('ab_dimensions',dimToDb(d,aId))))),
     ...((db.sections[aId]||[]).map(s=>safe(sbUpsert('ab_sections',secToDb(s,aId))))),
     ...((db.questions[aId]||[]).map(q=>safe(sbUpsert('ab_questions',qToDb(q,aId))))),
@@ -1495,7 +1498,11 @@ function rRMod(){
 }
 
 /* ══ ACTIONS ══ */
-function goTo(v,aId){if(aId)S.asmId=aId;S.view=v;render();if(v==='res'&&_session&&_tenantId)setTimeout(rlRs,150);}
+function goTo(v,aId){
+  if(S.view==='ed' && v!=='ed' && _lockAsmId) releaseLock(_lockAsmId);
+  if(aId)S.asmId=aId;S.view=v;render();
+  if(v==='res'&&_session&&_tenantId)setTimeout(rlRs,150);
+}
 function stTab(t){S.tab=t;render();}
 function togSec(id){S.expandedSecs[id]=S.expandedSecs[id]===false?true:false;render();}
 
