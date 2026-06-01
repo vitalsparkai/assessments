@@ -1496,10 +1496,12 @@ function svSec(){
   if(i>=0)secs[i]=s;else secs.push(s);
   sv();S.modal=null;render();
 }
-function dlSec(secId){
-  if(!confirm('Delete section? Questions will become ungrouped.'))return;
-  if(db.sections?.[S.asmId])db.sections[S.asmId]=db.sections[S.asmId].filter(s=>s.id!==secId);
-  (db.questions[S.asmId]||[]).forEach(q=>{if(q.sectionId===secId)q.sectionId=null;});
+async function dlSec(id){
+  if(!confirm('Delete this section? Questions in it will become unsectioned.'))return;
+  try { await sbDelete('ab_sections', `id=eq.${id}`); } catch(e){ toast('Could not delete section: '+e.message,'err');return; }
+  if(db.sections[S.asmId]) db.sections[S.asmId]=db.sections[S.asmId].filter(s=>s.id!==id);
+  // Unsection questions that were in this section
+  if(db.questions[S.asmId]) db.questions[S.asmId].forEach(q=>{ if(q.sectionId===id) q.sectionId=null; });
   sv();render();
 }
 function selAllDims(checked){document.querySelectorAll('#dim-checks input[type=checkbox]').forEach(el=>el.checked=checked);}
@@ -1577,7 +1579,19 @@ function mvQSec(qId,dir,secId){
   [qs[i].orderIndex,qs[j].orderIndex]=[qs[j].orderIndex,qs[i].orderIndex];
   sv();render();
 }
-function dlQ(id){if(!confirm('Delete this question?'))return;db.questions[S.asmId]=(db.questions[S.asmId]||[]).filter(q=>q.id!==id);sv();render();}
+async function dlQ(id){
+  if(!confirm('Delete this question?'))return;
+  // Delete from Supabase first (don't rely on sync — sync only upserts, never deletes)
+  try {
+    await sbDelete('ab_questions', `id=eq.${id}`);
+  } catch(e) {
+    toast('Could not delete question: '+e.message,'err');
+    return;
+  }
+  db.questions[S.asmId]=(db.questions[S.asmId]||[]).filter(q=>q.id!==id);
+  sv();
+  render();
+}
 
 /* Dimensions */
 function opDimMod(dId){if(dId){const d=gDs().find(d=>d.id===dId);S.modal={type:'dim',data:JSON.parse(JSON.stringify(d))};}else{S.modal={type:'dim',data:{_new:true,id:uid(),aId:S.asmId,name:'',description:'',color:'#3b82f6',orderIndex:gDs().length,ranges:[]}};}render();}
@@ -1585,7 +1599,12 @@ function addRng(){const rs=S.modal.data.ranges||[];const mx=rs.length?Math.max(.
 function updR(i,k,v){if(S.modal.data.ranges[i])S.modal.data.ranges[i][k]=(k==='min'||k==='max')?Number(v):v;}
 function rmR(i){S.modal.data.ranges.splice(i,1);render();}
 function svDim(){const d={...S.modal.data};d.name=document.getElementById('dm-n')?.value??d.name;d.description=document.getElementById('dm-d')?.value??d.description;d.color=document.getElementById('dm-c')?.value??d.color;delete d._new;if(!db.dimensions[S.asmId])db.dimensions[S.asmId]=[];const dims=db.dimensions[S.asmId];const i=dims.findIndex(x=>x.id===d.id);if(i>=0)dims[i]=d;else{d.orderIndex=dims.length;dims.push(d);}sv();S.modal=null;render();}
-function dlDim(id){if(!confirm('Delete dimension?'))return;db.dimensions[S.asmId]=(db.dimensions[S.asmId]||[]).filter(d=>d.id!==id);sv();render();}
+async function dlDim(id){
+  if(!confirm('Delete dimension?'))return;
+  try { await sbDelete('ab_dimensions', `id=eq.${id}`); } catch(e){ toast('Could not delete dimension: '+e.message,'err');return; }
+  db.dimensions[S.asmId]=(db.dimensions[S.asmId]||[]).filter(d=>d.id!==id);
+  sv();render();
+}
 
 /* Brand */
 function gBV(){return{primaryColor:document.getElementById('bc-p')?.value||DB0.primaryColor,bgColor:document.getElementById('bc-bg')?.value||DB0.bgColor,textColor:document.getElementById('bc-t')?.value||DB0.textColor,surfaceColor:document.getElementById('bc-s')?.value||DB0.surfaceColor,borderColor:document.getElementById('bc-b')?.value||DB0.borderColor,logoUrl:document.getElementById('bc-logo')?.value||'',fontFamily:document.getElementById('bc-f')?.value||DB0.fontFamily,btnRadius:String(document.getElementById('bc-br')?.value||8),cardRadius:String(document.getElementById('bc-cr')?.value||12)};}
