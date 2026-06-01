@@ -170,6 +170,75 @@ tr:hover td{background:#fafbff}
 @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 .sp{animation:spin .7s linear infinite;display:inline-block}
 @media(max-width:768px){.sgrid{grid-template-columns:1fr 1fr}.rrow{grid-template-columns:1fr 1fr 1fr}}
+
+/* ── PROJECTS ─────────────────────────────────────── */
+.pj-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 8px; border-radius: 6px;
+  font-size: 13px; color: #94a3b8;
+  cursor: pointer; transition: background .15s;
+  margin-bottom: 2px; position: relative;
+}
+.pj-item:hover { background: #1e293b; color: #e2e8f0; }
+.pj-item.on { background: #1e3a5f; color: #60a5fa; font-weight: 600; }
+.pj-item.drag-over { background: #1e3a5f !important; }
+.pj-actions { display: none; gap: 2px; }
+.pj-item:hover .pj-actions { display: flex; }
+.pj-actions button { background: transparent; border: none; cursor: pointer; padding: 2px 3px; border-radius: 3px; font-size: 12px; color: inherit; }
+.pj-actions button:hover { background: #334155; }
+
+/* ── FOLDER BREADCRUMB ────────────────────────────── */
+.fcrumb {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 20px;
+  background: #1e293b; border: 1px solid #334155;
+  color: #94a3b8; font-size: 12px; cursor: pointer;
+  font-family: inherit; transition: all .15s;
+}
+.fcrumb:hover { background: #263548; color: #e2e8f0; }
+.fcrumb.on { background: #1e3a5f; border-color: #3b82f6; color: #60a5fa; font-weight: 600; }
+.fcrumb-count { background: #334155; border-radius: 10px; padding: 0 6px; font-size: 10px; }
+.fcrumb.on .fcrumb-count { background: #2563eb; color: #fff; }
+.fcrumb-del { opacity: 0; margin-left: 2px; font-size: 10px; }
+.fcrumb:hover .fcrumb-del { opacity: 1; }
+
+/* ── FOLDER CARDS ─────────────────────────────────── */
+.fgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 14px; }
+.fcard {
+  background: #1e293b; border: 2px solid #334155;
+  border-radius: 10px; padding: 20px 16px;
+  text-align: center; cursor: pointer;
+  transition: all .15s; position: relative;
+  min-height: 110px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.fcard:hover { border-color: #DDB84E; background: #263040; }
+.fcard.drag-over { border-color: #DDB84E; background: #2a2000; }
+.fcard-actions { display: none; position: absolute; top: 6px; right: 6px; gap: 3px; }
+.fcard:hover .fcard-actions { display: flex; }
+.fcard-actions button { background: #334155; border: none; border-radius: 4px; padding: 3px 5px; cursor: pointer; font-size: 12px; color: #94a3b8; }
+.fcard-actions button:hover { background: #475569; color: #e2e8f0; }
+
+/* ── ASSESSMENT DRAG ──────────────────────────────── */
+.acard.drag-over { border-color: #DDB84E !important; }
+.acard[draggable=true] { cursor: grab; }
+.acard[draggable=true]:active { cursor: grabbing; opacity: .85; }
+
+/* ── EMPTY STATE ──────────────────────────────────── */
+.empty-state { text-align: center; padding: 60px 20px; }
+
+/* ── FOLDER MODAL ─────────────────────────────────── */
+.fmod { background: #1e293b; border-radius: 10px; padding: 24px; min-width: 320px; max-width: 400px; }
+.fmod h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+.fmod .folder-list { max-height: 280px; overflow-y: auto; }
+.fmod .flist-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-radius: 7px;
+  cursor: pointer; transition: background .12s; margin-bottom: 3px;
+  font-size: 14px; border: 2px solid transparent;
+}
+.fmod .flist-item:hover { background: #263548; }
+.fmod .flist-item.selected { border-color: #3b82f6; background: #1e3a5f; }
+.fmod .flist-item i { color: #DDB84E; font-size: 18px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
@@ -230,8 +299,8 @@ async function sbDel(table,id){
 }
 
 /* ── FIELD MAPPING: Builder (camelCase) ↔ Supabase (snake_case) ── */
-function asmToDb(a){return{id:a.id,tenant_id:_tenantId,title:a.title,description:a.description||'',status:a.status||'draft',brand:a.brand||{},webhook_url:a.webhookUrl||'',webhook_headers:a.webhookHeaders||'{"Content-Type":"application/json"}',show_results:a.showResults!==false,allow_retakes:a.allowRetakes!==false,created_at:a.createdAt||now()};}
-function dbToAsm(r){return{id:r.id,title:r.title,description:r.description||'',status:r.status||'draft',brand:r.brand||{},webhookUrl:r.webhook_url||'',webhookHeaders:r.webhook_headers||'{"Content-Type":"application/json"}',showResults:r.show_results!==false,allowRetakes:r.allow_retakes!==false,createdAt:r.created_at};}
+function asmToDb(a){return{id:a.id,tenant_id:_tenantId,title:a.title,description:a.description||'',status:a.status||'draft',brand:a.brand||{},webhook_url:a.webhookUrl||'',webhook_headers:a.webhookHeaders||'{"Content-Type":"application/json"}',show_results:a.showResults!==false,allow_retakes:a.allowRetakes!==false,created_at:a.createdAt||now(),folder_id:a.folder_id||null,project_id:a.project_id||null};}
+function dbToAsm(r){return{id:r.id,title:r.title,description:r.description||'',status:r.status||'draft',brand:r.brand||{},webhookUrl:r.webhook_url||'',webhookHeaders:r.webhook_headers||'{"Content-Type":"application/json"}',showResults:r.show_results!==false,allowRetakes:r.allow_retakes!==false,createdAt:r.created_at,folder_id:r.folder_id||null,project_id:r.project_id||null};}
 function qToDb(q,aId){return{id:q.id,assessment_id:aId||q.aId,section_id:q.sectionId||null,type:q.type,title:q.title||'',description:q.description||'',required:q.required!==false,order_index:q.orderIndex||0,position_weights:q.positionWeights||[],contact_fields:q.contactFields||[],options:q.options||[]};}
 function dbToQ(r){return{id:r.id,aId:r.assessment_id,sectionId:r.section_id,type:r.type,title:r.title||'',description:r.description||'',required:r.required!==false,orderIndex:r.order_index||0,positionWeights:r.position_weights||[],contactFields:r.contact_fields||[],options:r.options||[]};}
 function dimToDb(d,aId){return{id:d.id,assessment_id:aId||d.aId,name:d.name,description:d.description||'',color:d.color||'#3b82f6',order_index:d.orderIndex||0,ranges:d.ranges||[],show_in_results:d.showInResults!==false,max_score:d.maxScore||null};}
@@ -498,6 +567,178 @@ function getOpts(q) {
   const order = S.shuffledOrders[q.id];
   return order.map(id => opts.find(o => o.id === id)).filter(Boolean);
 }
+
+// ═══════════════════════════════════════════════════
+// PROJECTS & FOLDERS
+// ═══════════════════════════════════════════════════
+
+function rFolderModal() {
+  if (!S.folderModal) return '';
+  const asmId = S.folderModal;
+  const asm = db.assessments.find(a=>a.id===asmId);
+  const folders = db.folders.filter(f=>f.project_id===S.projectId);
+  return `<div class="mov" onclick="if(event.target===this){S.folderModal=null;render()}" style="display:flex;align-items:center;justify-content:center">
+    <div class="fmod">
+      <div class="fx ic jb mb2">
+        <h3><i class="ti ti-folder-arrow-right" style="color:#DDB84E"></i> Move Assessment</h3>
+        <button onclick="S.folderModal=null;render()" style="background:transparent;border:none;color:#64748b;font-size:18px;cursor:pointer"><i class="ti ti-x"></i></button>
+      </div>
+      <p style="font-size:13px;color:#64748b;margin-bottom:14px">${esc(asm?.title||'')}</p>
+      <div class="folder-list">
+        <div class="flist-item ${!asm?.folder_id?'selected':''}" onclick="moveAsmToFolder('${asmId}',null)">
+          <i class="ti ti-file-off"></i> Unfiled
+        </div>
+        ${folders.map(f=>`<div class="flist-item ${asm?.folder_id===f.id?'selected':''}" onclick="moveAsmToFolder('${asmId}','${f.id}')">
+          <i class="ti ti-folder"></i> ${esc(f.name)}
+        </div>`).join('')}
+      </div>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end">
+        <button class="btn" onclick="S.folderModal=null;render()" style="background:transparent;border:1px solid #334155;color:#94a3b8">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function crtProject() {
+  const name = prompt('Project name:');
+  if (!name) return;
+  const desc = prompt('Description (optional):') || '';
+  try {
+    const p = await sbInsert('ab_projects', {name:name.trim(), description:desc.trim(), owner_id:_userId});
+    db.projects.push(p);
+    S.projectId = p.id;
+    render();
+  } catch(e) { toast('Could not create project: '+e.message,'error'); }
+}
+
+async function renameProject(id) {
+  const p = db.projects.find(x=>x.id===id);
+  if (!p) return;
+  const name = prompt('Rename project:', p.name);
+  if (!name || name===p.name) return;
+  try {
+    await sbUpdate('ab_projects', `id=eq.${id}`, {name:name.trim()});
+    p.name = name.trim();
+    render();
+  } catch(e) { toast('Could not rename: '+e.message,'error'); }
+}
+
+async function delProject(id) {
+  if (!confirm('Delete this project? Assessments will become unfiled.')) return;
+  try {
+    await sbUpdate('ab_assessments', `project_id=eq.${id}`, {project_id:null, folder_id:null});
+    db.assessments.forEach(a=>{ if(a.project_id===id){a.project_id=null;a.folder_id=null;} });
+    await sbDelete('ab_projects', `id=eq.${id}`);
+    db.projects = db.projects.filter(p=>p.id!==id);
+    db.folders  = db.folders.filter(f=>f.project_id!==id);
+    if (S.projectId===id) { S.projectId=null; S.folderId=null; }
+    render();
+  } catch(e) { toast('Could not delete project: '+e.message,'error'); }
+}
+
+async function crtFolder() {
+  if (!S.projectId) { toast('Select or create a project first','info'); return; }
+  const name = prompt('Folder name:');
+  if (!name) return;
+  try {
+    const f = await sbInsert('ab_folders', {name:name.trim(), project_id:S.projectId, owner_id:_userId, order_index:db.folders.length});
+    db.folders.push(f);
+    S.folderId = f.id;
+    render();
+  } catch(e) { toast('Could not create folder: '+e.message,'error'); }
+}
+
+async function renameFolder(id) {
+  const f = db.folders.find(x=>x.id===id);
+  if (!f) return;
+  const name = prompt('Rename folder:', f.name);
+  if (!name || name===f.name) return;
+  try {
+    await sbUpdate('ab_folders', `id=eq.${id}`, {name:name.trim()});
+    f.name = name.trim();
+    render();
+  } catch(e) { toast('Could not rename: '+e.message,'error'); }
+}
+
+async function delFolder(id) {
+  const cnt = db.assessments.filter(a=>a.folder_id===id).length;
+  if (!confirm(`Delete folder? ${cnt>0?cnt+' assessment(s) will become unfiled.':''}`.trim())) return;
+  try {
+    await sbUpdate('ab_assessments', `folder_id=eq.${id}`, {folder_id:null});
+    db.assessments.forEach(a=>{ if(a.folder_id===id) a.folder_id=null; });
+    await sbDelete('ab_folders', `id=eq.${id}`);
+    db.folders = db.folders.filter(f=>f.id!==id);
+    if (S.folderId===id) S.folderId=null;
+    render();
+  } catch(e) { toast('Could not delete folder: '+e.message,'error'); }
+}
+
+function openMoveAsm(asmId) {
+  S.folderModal = asmId;
+  render();
+}
+
+async function moveAsmToFolder(asmId, folderId) {
+  const asm = db.assessments.find(a=>a.id===asmId);
+  if (!asm) return;
+  try {
+    await sbUpdate('ab_assessments', `id=eq.${asmId}`, {folder_id:folderId, project_id:S.projectId||null});
+    asm.folder_id = folderId;
+    asm.project_id = S.projectId||null;
+    S.folderModal = null;
+    render();
+    toast('Moved','success');
+  } catch(e) { toast('Could not move: '+e.message,'error'); }
+}
+
+// Drag from assessment card
+let _dragAsmId = null;
+function dAsmStart(e, asmId) {
+  _dragAsmId = asmId;
+  e.dataTransfer.effectAllowed = 'move';
+}
+function dFolderStart(e, folderId) {
+  // For folder reordering (future) — placeholder
+  e.dataTransfer.setData('folderId', folderId);
+}
+async function dropOnAsm(e, targetAsmId) {
+  // Dropped asm on another asm — do nothing
+}
+
+// Drop asm onto sidebar project
+async function dropAsmInProject(e, projectId) {
+  if (!_dragAsmId) return;
+  const asm = db.assessments.find(a=>a.id===_dragAsmId);
+  if (!asm) return;
+  try {
+    await sbUpdate('ab_assessments', `id=eq.${_dragAsmId}`, {project_id:projectId, folder_id:null});
+    asm.project_id = projectId; asm.folder_id = null;
+    _dragAsmId = null;
+    render();
+    toast('Moved to project','success');
+  } catch(e) { toast('Could not move: '+e.message,'error'); }
+}
+
+// Drop asm onto folder card in workspace
+document.addEventListener('dragover', function(e){
+  const fc = e.target.closest('.fcard');
+  if (fc && _dragAsmId) { e.preventDefault(); fc.classList.add('drag-over'); }
+});
+document.addEventListener('drop', async function(e){
+  const fc = e.target.closest('.fcard');
+  if (!fc || !_dragAsmId) return;
+  const folderId = fc.dataset.folderId;
+  if (!folderId) return;
+  e.preventDefault();
+  const asm = db.assessments.find(a=>a.id===_dragAsmId);
+  if (!asm) return;
+  try {
+    await sbUpdate('ab_assessments', `id=eq.${_dragAsmId}`, {folder_id:folderId, project_id:S.projectId||null});
+    asm.folder_id=folderId; asm.project_id=S.projectId||null;
+    _dragAsmId=null; render(); toast('Moved to folder','success');
+  } catch(e2){ toast('Drop failed','error'); }
+});
+
 function render(){
   const app=document.getElementById('app');
   if(S.view==='take'){app.innerHTML=rTake();return;}
@@ -508,6 +749,31 @@ function render(){
       <div class="si ${S.view==='home'?'on':''}" onclick="goTo('home')"><i class="ti ti-layout-grid"></i> Assessments</div>
       ${S.asmId?`<div class="si ${S.view==='ed'?'on':''}" onclick="goTo('ed')"><i class="ti ti-pencil"></i> Editor</div><div class="si ${S.view==='res'?'on':''}" onclick="goTo('res')"><i class="ti ti-users"></i> Results</div>`:''}
     </nav>
+    <!-- Projects panel -->
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #1e293b">
+      <div class="fx ic jb" style="padding:0 8px;margin-bottom:6px">
+        <span style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#475569;font-weight:700">Projects</span>
+        <button onclick="crtProject()" style="background:transparent;border:none;color:#64748b;cursor:pointer;padding:2px 4px;font-size:14px" title="New project"><i class="ti ti-plus"></i></button>
+      </div>
+      <div id="proj-list">
+        <div class="pj-item ${!S.projectId?'on':''}" onclick="S.projectId=null;S.folderId=null;goTo('home')">
+          <i class="ti ti-layout-grid"></i> All
+        </div>
+        ${(db.projects||[]).map(p=>`
+        <div class="pj-item ${S.projectId===p.id?'on':''}"
+          ondragover="event.preventDefault();this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="event.preventDefault();this.classList.remove('drag-over');dropAsmInProject(event,'${p.id}')">
+          <span onclick="S.projectId='${p.id}';S.folderId=null;goTo('home')" style="flex:1;display:flex;align-items:center;gap:6px;cursor:pointer">
+            <i class="ti ti-briefcase"></i> ${esc(p.name)}
+          </span>
+          <span class="pj-actions">
+            <button onclick="event.stopPropagation();renameProject('${p.id}')" title="Rename"><i class="ti ti-pencil"></i></button>
+            <button onclick="event.stopPropagation();delProject('${p.id}')" title="Delete" style="color:#ef4444"><i class="ti ti-trash"></i></button>
+          </span>
+        </div>`).join('')}
+      </div>
+    </div>
     <div class="s-foot">
       <div style="margin-bottom:8px;font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_userEmail}">${_userName||_userEmail}</div>
       <div style="display:flex;align-items:center;justify-content:space-between">
@@ -521,21 +787,98 @@ function render(){
 
 /* ══ HOME ══ */
 function rHome(){
-  return `<div class="content"><div class="ph"><div><h1>Assessments</h1><p class="ph-sub">Build, brand, and deploy scoring experiences</p></div><button class="btn bp" onclick="crtAsm()"><i class="ti ti-plus"></i> New Assessment</button></div>
-  ${db.assessments.length?`<div class="agrid">${db.assessments.map(a=>{const b=gb(a);const qs=db.questions[a.id]||[];const rs=db.responses[a.id]||[];const secs=(db.sections||{})[a.id]||[];
-    return `<div class="acard" style="border-top:3px solid ${esc(b.primaryColor)}">
-      ${b.logoUrl?`<img src="${esc(b.logoUrl)}" style="height:24px;object-fit:contain;margin-bottom:10px" onerror="this.style.display='none'" alt="">`:''}
-      <div class="fx ic jb mb2"><div style="font-size:15px;font-weight:600">${esc(a.title)}</div><span class="bdg ${a.status==='published'?'bpub':'bdft'}">${a.status}</span></div>
-      ${a.description?`<p style="font-size:12.5px;color:var(--muted);margin-bottom:10px;line-height:1.5">${esc(a.description)}</p>`:''}
-      <div class="fx g3 mb3" style="font-size:12px;color:var(--muted)"><span><i class="ti ti-layout-rows"></i> ${secs.length} section${secs.length!==1?'s':''}</span><span><i class="ti ti-help-circle"></i> ${qs.length} question${qs.length!==1?'s':''}</span><span><i class="ti ti-users"></i> ${rs.length} response${rs.length!==1?'s':''}</span></div>
-      <div class="fx g2 mt2">
-        <button class="btn bs bsm" onclick="edAsm('${a.id}')"><i class="ti ti-pencil"></i> Edit</button>
-        <button class="btn bs bsm" onclick="vwRes('${a.id}')"><i class="ti ti-users"></i> Results</button>
-        <button class="btn bp bsm" onclick="prvAsm('${a.id}')"><i class="ti ti-eye"></i> Preview</button>
-        <button class="btn bg bic bsm" onclick="dlAsm('${a.id}')"><i class="ti ti-trash"></i></button>
-      </div></div>`;}).join('')}</div>`
-  :`<div class="empty"><i class="ti ti-clipboard-list"></i><p>No assessments yet</p><button class="btn bp mt3" onclick="crtAsm()"><i class="ti ti-plus"></i> Create First</button></div>`}</div>`;
+  const curProject = db.projects.find(p=>p.id===S.projectId)||null;
+  const folders = db.folders.filter(f=>f.project_id===S.projectId);
+  // Assessments in this project
+  const allAsms = db.assessments.filter(a=>!S.projectId||(a.project_id===S.projectId));
+  // Current folder filter
+  const viewAsms = S.folderId==='__none__'
+    ? allAsms.filter(a=>!a.folder_id)
+    : S.folderId
+      ? allAsms.filter(a=>a.folder_id===S.folderId)
+      : allAsms;
+
+  return `<div class="content">
+  <!-- Page header -->
+  <div class="ph">
+    <div>
+      <h1>${curProject?esc(curProject.name):'All Assessments'}</h1>
+      <p class="ph-sub">${curProject?esc(curProject.description||''):'Build, brand, and deploy scoring experiences'}</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn" onclick="crtFolder()" style="background:#1e293b;border:1px solid #334155;color:#94a3b8" title="New folder"><i class="ti ti-folder-plus"></i> New Folder</button>
+      <button class="btn bp" onclick="crtAsm()"><i class="ti ti-plus"></i> New Assessment</button>
+    </div>
+  </div>
+
+  <!-- Folder breadcrumb / filter bar -->
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:18px;flex-wrap:wrap">
+    <button onclick="S.folderId=null;render()" class="fcrumb ${!S.folderId?'on':''}"><i class="ti ti-home-2"></i> All</button>
+    <button onclick="S.folderId='__none__';render()" class="fcrumb ${S.folderId==='__none__'?'on':''}"><i class="ti ti-file"></i> Unfiled</button>
+    ${folders.map(f=>`<button onclick="S.folderId='${f.id}';render()" class="fcrumb ${S.folderId===f.id?'on':''}" draggable="false">
+      <i class="ti ti-folder"></i> ${esc(f.name)}
+      <span class="fcrumb-count">${allAsms.filter(a=>a.folder_id===f.id).length}</span>
+      <span class="fcrumb-del" onclick="event.stopPropagation();delFolder('${f.id}')" title="Delete folder"><i class="ti ti-x"></i></span>
+    </button>`).join('')}
+  </div>
+
+  <!-- Folder cards when viewing "All" -->
+  ${!S.folderId&&folders.length?`<div style="margin-bottom:24px">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;font-weight:600">Folders</div>
+    <div class="fgrid">
+      ${folders.map(f=>{
+        const cnt = allAsms.filter(a=>a.folder_id===f.id).length;
+        return `<div class="fcard" draggable="true" data-folder-id="${f.id}"
+          ondragstart="dFolderStart(event,'${f.id}')"
+          ondragover="event.preventDefault();this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="event.preventDefault();this.classList.remove('drag-over')"
+          onclick="S.folderId='${f.id}';render()">
+          <i class="ti ti-folder" style="font-size:28px;color:#DDB84E;margin-bottom:8px"></i>
+          <div style="font-weight:600;font-size:14px;margin-bottom:4px">${esc(f.name)}</div>
+          <div style="font-size:12px;color:#64748b">${cnt} assessment${cnt!==1?'s':''}</div>
+          <div class="fcard-actions" onclick="event.stopPropagation()">
+            <button onclick="renameFolder('${f.id}')" title="Rename"><i class="ti ti-pencil"></i></button>
+            <button onclick="delFolder('${f.id}')" title="Delete" style="color:#ef4444"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`:''}
+
+  <!-- Assessment grid -->
+  ${viewAsms.length?`<div>
+    ${S.folderId?`<div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;font-weight:600">
+      ${S.folderId==='__none__'?'Unfiled Assessments':esc(folders.find(f=>f.id===S.folderId)?.name||'')}
+    </div>`:'<div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;margin-bottom:10px;font-weight:600">Assessments</div>'}
+    <div class="agrid" id="asm-grid">
+      ${viewAsms.map(a=>{const b=gb(a);const qs=db.questions[a.id]||[];const rs=db.responses[a.id]||[];const secs=(db.sections||{})[a.id]||[];
+        const folderName = db.folders.find(f=>f.id===a.folder_id)?.name||'';
+        return `<div class="acard" style="border-top:3px solid ${esc(b.primaryColor)}"
+          draggable="true"
+          ondragstart="dAsmStart(event,'${a.id}')"
+          ondragover="event.preventDefault();this.classList.add('drag-over')"
+          ondragleave="this.classList.remove('drag-over')"
+          ondrop="event.preventDefault();this.classList.remove('drag-over');dropOnAsm(event,'${a.id}')">
+          ${b.logoUrl?`<img src="${esc(b.logoUrl)}" style="height:24px;object-fit:contain;margin-bottom:10px" onerror="this.style.display='none'" alt="">`:'' }
+          <div class="fx ic jb mb2"><div style="font-size:15px;font-weight:600">${esc(a.title)}</div><span class="bdg ${a.status==='published'?'bsuc':'bwrn'}">${a.status||'draft'}</span></div>
+          ${folderName?`<div style="font-size:11px;color:#64748b;margin-bottom:4px"><i class="ti ti-folder" style="font-size:10px"></i> ${esc(folderName)}</div>`:''}
+          <div class="fx g2 mb2" style="font-size:12px;color:#64748b"><span><i class="ti ti-list-check"></i> ${qs.length} q</span><span><i class="ti ti-users"></i> ${rs.length} resp</span><span><i class="ti ti-layout-columns"></i> ${secs.length} sec</span></div>
+          <div class="acard-actions fx g2">
+            <button class="btn bsm" onclick="editAsm('${a.id}')"><i class="ti ti-pencil"></i> Edit</button>
+            <button class="btn bsm" onclick="S.asmId='${a.id}';goTo('res')"><i class="ti ti-users"></i> Results</button>
+            <button class="btn bsm" style="margin-left:auto" onclick="openMoveAsm('${a.id}')" title="Move to folder"><i class="ti ti-folder-arrow-right"></i></button>
+            <button class="btn bsm" style="color:#ef4444" onclick="delAsm('${a.id}')"><i class="ti ti-trash"></i></button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`:`<div class="empty-state"><i class="ti ti-folder-open" style="font-size:48px;color:#334155;margin-bottom:12px"></i><p style="color:#64748b">${S.folderId&&S.folderId!=='__none__'?'No assessments in this folder':'No assessments yet'}</p>${S.folderId?`<button class="btn" onclick="S.folderId=null;render()" style="margin-top:12px;background:#1e293b;border:1px solid #334155;color:#94a3b8">View all</button>`:''}</div>`}
+
+  ${rFolderModal()}
+  `;
 }
+
 
 /* ══ EDITOR ══ */
 function rEd(){
@@ -2387,6 +2730,7 @@ async function initAuth(){
       }
       _userEmail=session.user.email||'';
       _userName=session.user.user_metadata?.full_name||session.user.user_metadata?.name||_userEmail;
+      _userId=session.user.id||null;
       try{
         _tenantId=await ensureTenant();
         showLoading();
@@ -2431,4 +2775,12 @@ function showLoading(){
 initAuth();
 </script>
 </body>
-</html>
+</htmlasync function sbDelete(table, query) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+    method: 'DELETE', headers: _hdrs({ Prefer: 'return=minimal' })
+  });
+  if (!r.ok) { const t = await r.text(); throw new Error(t); }
+  return true;
+}
+
+>
