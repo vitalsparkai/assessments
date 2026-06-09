@@ -1126,8 +1126,25 @@ function rSc(){
 function rBr(asm){
   const b=gb(asm);
   const CF=[['bc-p','Primary Color',b.primaryColor],['bc-bg','Page Background',b.bgColor],['bc-t','Body Text',b.textColor],['bc-s','Card / Surface',b.surfaceColor],['bc-b','Borders',b.borderColor]];
+  const presets = getBrandPresets();
+  const presetsHtml = presets.length ? presets.map(p=>`
+    <div style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px">
+      <div style="display:flex;gap:3px;flex-shrink:0">
+        ${['primaryColor','bgColor','textColor'].map(k=>`<div style="width:12px;height:12px;border-radius:3px;background:${esc(p.brand[k]||'#ccc')};border:1px solid rgba(0,0,0,.1)"></div>`).join('')}
+      </div>
+      <span style="font-size:13px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span>
+      <button onclick="applyPreset('${p.id}')" class="btn bsm" style="padding:3px 8px;font-size:11px">Apply</button>
+      <button onclick="deletePreset('${p.id}')" class="btn bsm" style="padding:3px 6px;font-size:11px;color:#ef4444;background:transparent;border-color:#fecaca"><i class="ti ti-trash"></i></button>
+    </div>`).join('') : '<div style="font-size:13px;color:var(--muted);padding:4px 0">No presets yet — set up a brand and save it as a preset.</div>';
   return `<div style="display:grid;grid-template-columns:1fr 310px;gap:24px;align-items:flex-start">
     <div>
+      <div class="card mb3">
+        <div class="ctit" style="display:flex;align-items:center;justify-content:space-between">
+          <span><i class="ti ti-bookmarks"></i> Brand Presets</span>
+          <button onclick="saveAsPreset()" class="btn bsm" style="font-size:12px"><i class="ti ti-plus"></i> Save Current as Preset</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">${presetsHtml}</div>
+      </div>
       <div class="card mb3"><div class="ctit"><i class="ti ti-photo"></i> Logo</div>
         <div class="fg" style="margin-bottom:6px"><label>Logo URL</label><input type="url" id="bc-logo" value="${esc(b.logoUrl)}" placeholder="https://..." oninput="upPv()"></div>
         <div id="lp" style="${b.logoUrl?'':'display:none'};margin-top:6px">${b.logoUrl?`<img src="${esc(b.logoUrl)}" style="height:30px;object-fit:contain;border:1px solid var(--border);border-radius:6px;padding:5px;background:#f8fafc" onerror="this.style.display='none'" alt="">`:''}</div>
@@ -1819,6 +1836,56 @@ function gBV(){return{primaryColor:document.getElementById('bc-p')?.value||DB0.p
 function upPv(){const b=gBV();const p=document.getElementById('bp');if(p)p.innerHTML=mkPv(b);const lp=document.getElementById('lp');if(lp){if(b.logoUrl){lp.style.display='';lp.innerHTML=`<img src="${esc(b.logoUrl)}" style="height:30px;object-fit:contain;border:1px solid var(--border);border-radius:6px;padding:5px;background:#f8fafc" onerror="this.style.display='none'" alt="Logo">`;}else lp.style.display='none';}}
 function apSw(id,c){const e=document.getElementById(id);const h=document.getElementById(id+'-hex');if(e)e.value=c;if(h)h.value=c;upPv();}
 function bindCP(){['bc-p','bc-bg','bc-t','bc-s','bc-b'].forEach(id=>{const p=document.getElementById(id);const h=document.getElementById(id+'-hex');if(p&&h){p.addEventListener('input',()=>{h.value=p.value;upPv();});h.addEventListener('input',()=>{if(/^#[0-9a-fA-F]{6}$/.test(h.value)){p.value=h.value;upPv();}});}});}
+
+// ═══════════════════════════════════════════════════════════════
+// BRAND PRESETS — stored in localStorage per tenant
+// ═══════════════════════════════════════════════════════════════
+function getBrandPresets() {
+  try { return JSON.parse(localStorage.getItem(STORE+'_brandPresets')||'[]'); }
+  catch(e){ return []; }
+}
+function saveBrandPresets(presets) {
+  try { localStorage.setItem(STORE+'_brandPresets', JSON.stringify(presets)); } catch(e){}
+}
+function saveAsPreset() {
+  const name = prompt('Name this brand preset:');
+  if (!name || !name.trim()) return;
+  const presets = getBrandPresets();
+  const preset = { id: uid(), name: name.trim(), brand: gBV(), createdAt: now() };
+  presets.push(preset);
+  saveBrandPresets(presets);
+  toast('Brand preset saved ✓');
+  render();
+}
+function applyPreset(id) {
+  const preset = getBrandPresets().find(p => p.id === id);
+  if (!preset) return;
+  const b = preset.brand;
+  // Apply to form fields
+  ['bc-p','bc-bg','bc-t','bc-s','bc-b'].forEach((fid, i) => {
+    const vals = [b.primaryColor, b.bgColor, b.textColor, b.surfaceColor, b.borderColor];
+    const el = document.getElementById(fid);
+    const hex = document.getElementById(fid+'-hex');
+    if (el) el.value = vals[i]||'';
+    if (hex) hex.value = vals[i]||'';
+  });
+  const logo = document.getElementById('bc-logo');
+  const font = document.getElementById('bc-f');
+  const btnR = document.getElementById('bc-br');
+  const crdR = document.getElementById('bc-cr');
+  if (logo) logo.value = b.logoUrl||'';
+  if (font) font.value = b.fontFamily||DB0.fontFamily;
+  if (btnR) btnR.value = b.btnRadius||'8';
+  if (crdR) crdR.value = b.cardRadius||'12';
+  upPv();
+  toast('Preset applied — click Save Brand to keep it');
+}
+function deletePreset(id) {
+  if (!confirm('Delete this brand preset?')) return;
+  saveBrandPresets(getBrandPresets().filter(p => p.id !== id));
+  toast('Preset deleted');
+  render();
+}
 function svBr(asmId){const a=db.assessments.find(a=>a.id===asmId);if(a){a.brand=gBV();sv();toast('Brand saved \u2713');}}
 function rstBr(asmId){if(!confirm('Reset brand to defaults?'))return;const a=db.assessments.find(a=>a.id===asmId);if(a){a.brand={...DB0};sv();render();}}
 
