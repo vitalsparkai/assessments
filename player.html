@@ -558,10 +558,15 @@ if (typeof marked !== 'undefined') {
   marked.setOptions({ breaks: true, gfm: true });
 }
 
-// Normalize stored text — fix escaped newlines from JSON storage
+// Normalize stored text — handle legacy HTML workarounds + escaped newlines
 const normalizeText = (s) => String(s ?? '')
-  .replace(/\\n/g, '\n')   // literal \n → real newline
-  .replace(/\\t/g, '\t');  // literal \t → real tab
+  .replace(/\\n/g, '\n')            // literal \n string → real newline
+  .replace(/\\t/g, '\t')            // literal \t string → real tab
+  .replace(/<p>\s*<\/p>/gi, '\n\n') // <p></p> → blank line (paragraph break)
+  .replace(/<br\s*\/?>/gi, '\n')     // <br> → newline
+  .replace(/<\/p>\s*<p>/gi, '\n\n') // </p><p> → paragraph break
+  .replace(/<p>/gi, '')               // strip remaining <p>
+  .replace(/<\/p>/gi, '\n\n');      // </p> → paragraph break
 
 const md = (s) => {
   if (!s) return '';
