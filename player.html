@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Assessment</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <style>
 /* ── CONFIG: these values are injected at deploy time ── */
@@ -79,6 +80,18 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;min-heigh
 .tok{background:#022c22;color:#34d399}.terr{background:#450a0a;color:#f87171}
 @keyframes tslide{from{transform:translateX(50px);opacity:0}to{transform:none;opacity:1}}
 
+/* ── MARKDOWN CONTENT ─────────────────────────────────── */
+.md-content { line-height: 1.7; }
+.md-content p { margin: 0 0 10px; }
+.md-content p:last-child { margin-bottom: 0; }
+.md-content strong { font-weight: 700; }
+.md-content em { font-style: italic; }
+.md-content ul, .md-content ol { padding-left: 20px; margin: 8px 0; }
+.md-content li { margin-bottom: 4px; }
+.md-content a { color: inherit; text-decoration: underline; }
+.md-content code { background: rgba(0,0,0,.08); padding: 1px 5px; border-radius: 3px; font-size: .9em; }
+.md-content h1,.md-content h2,.md-content h3 { font-weight: 700; margin: 12px 0 6px; }
+h2 .md-inline, .opt-label .md-inline { display: inline; }
 /* ── MOBILE ───────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .vs-wrap, .container, .q-wrap { padding: 12px !important; }
@@ -538,6 +551,38 @@ const br = () => parseInt(b().btnRadius) || 8;
 const cr = () => parseInt(b().cardRadius) || 12;
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
+// md() — renders markdown AND raw HTML in content fields
+// Used for question titles, descriptions, option text, section text
+const md = (s) => {
+  if (!s) return '';
+  try {
+    // If marked is loaded use it, otherwise fall back to basic HTML pass-through
+    if (typeof marked !== 'undefined') {
+      return marked.parse(String(s), {
+        breaks: true,      // single newline = <br>
+        gfm: true,         // github-flavoured markdown
+        mangle: false,
+        headerIds: false,
+      });
+    }
+    // Fallback: just allow HTML through (don't escape)
+    return String(s);
+  } catch(e) {
+    return esc(s); // safety fallback
+  }
+};
+
+// mdi() — inline markdown (no wrapping <p> tag) for short labels
+const mdi = (s) => {
+  if (!s) return '';
+  try {
+    if (typeof marked !== 'undefined') {
+      return marked.parseInline(String(s), { breaks: true, gfm: true });
+    }
+    return String(s);
+  } catch(e) { return esc(s); }
+};
+
 // ═══════════════════════════════════════════════════════════════════
 // SHUFFLE
 function seededShuffle(arr, seed) {
@@ -627,14 +672,14 @@ function rQ(q, brand) {
   const cs = `background:${esc(brand.surfaceColor)};border:1px solid ${esc(brand.borderColor)};border-radius:${cardR}px;color:${esc(brand.textColor)}`;
 
   if (q.type === 'instruction') return `<div class="qcard" style="${cs}">
-    <h2 style="font-size:22px;font-weight:700;margin-bottom:14px">${esc(q.title)}</h2>
-    ${q.description ? `<p style="font-size:15px;line-height:1.75;opacity:.7">${esc(q.description)}</p>` : ''}
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:14px">${mdi(q.title)}</h2>
+    ${q.description ? `<div class="md-content" style="font-size:15px;line-height:1.75;opacity:.7">${md(q.description)}</div>` : ''}
   </div>`;
 
   if (q.type === 'contact_form') {
     const fields = q.contact_fields || [];
     return `<div class="qcard" style="${cs}">
-      <h2 style="font-size:19px;font-weight:700;margin-bottom:16px">${esc(q.title)}</h2>
+      <h2 style="font-size:19px;font-weight:700;margin-bottom:16px">${mdi(q.title)}</h2>
       ${fields.map(f => `<div style="margin-bottom:14px">
         <label class="cf-label" style="color:${esc(brand.textColor)}">${esc(f.label)}${f.required ? ' *' : ''}</label>
         <input type="${esc(f.type || 'text')}" id="cf_${esc(f.label.replace(/\s+/g,'_'))}"
@@ -648,8 +693,8 @@ function rQ(q, brand) {
   if (q.type === 'multiple_choice') {
     const sel = S.answers[q.id];
     return `<div class="qcard" style="${cs}">
-      <h2>${esc(q.title)}</h2>
-      ${q.description ? `<p class="qdesc">${esc(q.description)}</p>` : '<div style="height:16px"></div>'}
+      <h2>${mdi(q.title)}</h2>
+      ${q.description ? `<div class="md-content qdesc">${md(q.description)}</div>` : '<div style="height:16px"></div>'}
       ${(q.options || []).map(opt => `
         <button class="opt-btn" onclick="selOpt('${q.id}','${opt.id}')"
           style="border-color:${sel===opt.id ? brand.primaryColor : brand.borderColor};background:${sel===opt.id ? brand.primaryColor+'18' : 'transparent'};color:${sel===opt.id ? brand.primaryColor : brand.textColor};border-radius:${Math.max(0,cardR-4)}px">
@@ -663,7 +708,7 @@ function rQ(q, brand) {
   if (q.type === 'multi_select') {
     const sel = Array.isArray(S.answers[q.id]) ? S.answers[q.id] : [];
     return `<div class="qcard" style="${cs}">
-      <h2>${esc(q.title)}</h2>
+      <h2>${mdi(q.title)}</h2>
       <p class="qdesc">Select all that apply</p>
       ${getOpts(q).map(opt => { const is = sel.includes(opt.id); return `
         <button class="opt-btn" onclick="togMulti('${q.id}','${opt.id}')"
@@ -683,7 +728,7 @@ function rQ(q, brand) {
     const oMap = Object.fromEntries(opts.map(o => [o.id, o]));
     const n = order.length;
     return `<div class="qcard" style="${cs}">
-      <h2>${esc(q.title)}</h2>
+      <h2>${mdi(q.title)}</h2>
       <p class="qdesc">${esc(q.description) || 'Drag to reorder — most important at the top'}</p>
       <div class="rank-list">
         ${order.map((optId, idx) => {
@@ -711,7 +756,7 @@ function rQ(q, brand) {
   }
 
   if (q.type === 'text') return `<div class="qcard" style="${cs}">
-    <h2 style="margin-bottom:16px">${esc(q.title)}</h2>
+    <h2 style="margin-bottom:16px">${mdi(q.title)}</h2>
     <textarea rows="5" oninput="S.answers['${q.id}']=this.value"
       style="width:100%;padding:12px;border:1px solid ${esc(brand.borderColor)};border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;background:${esc(brand.bgColor)};color:${esc(brand.textColor)};outline:none">${esc(S.answers[q.id]||'')}</textarea>
   </div>`;
@@ -743,7 +788,7 @@ function rResults() {
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
               <div style="display:flex;align-items:center;gap:8px">
                 <div style="width:10px;height:10px;border-radius:50%;background:${esc(d.color||brand.primaryColor)}"></div>
-                <strong style="color:${esc(brand.textColor)}">${esc(d.name)}</strong>
+                <strong style="color:${esc(brand.textColor)}">${mdi(d.name)}</strong>
                 ${isTied ? `<span class="top-badge" style="background:${esc(brand.primaryColor)}">★ Top${tiedTop.length>1?' (Tied)':''}</span>` : ''}
               </div>
               ${rank ? `<span style="color:${esc(d.color||brand.primaryColor)};font-size:13px;font-weight:700">${esc(rank.label)}</span>` : ''}
