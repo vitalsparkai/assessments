@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Assessment</title>
-<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
 <style>
 /* ── CONFIG: these values are injected at deploy time ── */
@@ -549,14 +548,46 @@ const DB = { primaryColor:'#2563eb', bgColor:'#f8fafc', textColor:'#1e293b', sur
 const b = () => ({ ...DB, ...(ASM?.brand || {}) });
 const br = () => parseInt(b().btnRadius) || 8;
 const cr = () => parseInt(b().cardRadius) || 12;
+
 const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+// ── MARKDOWN RENDERER (no external deps) ────────────────────────
+function inlineFmt(s) {
+  return String(s||'')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+
+function renderMd(s, inline) {
+  if (!s) return '';
+  let t = String(s)
+    .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/<p>\s*<\/p>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<p[^>]*>/gi, '').replace(/<\/p>/gi, '\n\n');
+  if (inline) return inlineFmt(t);
+  return t.split(/\n\n+/).map(para => {
+    para = para.trim(); if (!para) return '';
+    if (/^### /.test(para)) return '<h3>'+inlineFmt(para.slice(4))+'</h3>';
+    if (/^## /.test(para))  return '<h2>'+inlineFmt(para.slice(3))+'</h2>';
+    if (/^# /.test(para))   return '<h1>'+inlineFmt(para.slice(2))+'</h1>';
+    if (/^[-*] /m.test(para)) return '<ul>'+para.split('\n').filter(l=>l.trim()).map(l=>'<li>'+inlineFmt(l.replace(/^[-*] /,''))+'</li>').join('')+'</ul>';
+    if (/^\d+\. /m.test(para)) return '<ol>'+para.split('\n').filter(l=>l.trim()).map(l=>'<li>'+inlineFmt(l.replace(/^\d+\. /,''))+'</li>').join('')+'</ol>';
+    return '<p style="margin:0 0 0.8em">'+inlineFmt(para.replace(/\n/g,'<br>'))+'</p>';
+  }).join('');
+}
+
+const md  = s => renderMd(s, false);
+const mdi = s => renderMd(s, true);
+
 
 // md() — renders markdown AND raw HTML in content fields
 // Used for question titles, descriptions, option text, section text
-// Configure marked once
-if (typeof marked !== 'undefined') {
-  marked.setOptions({ breaks: true, gfm: true });
-}
+
 
 // Normalize stored text — handle legacy HTML workarounds + escaped newlines
 const normalizeText = (s) => String(s ?? '')
@@ -568,28 +599,7 @@ const normalizeText = (s) => String(s ?? '')
   .replace(/<p>/gi, '')               // strip remaining <p>
   .replace(/<\/p>/gi, '\n\n');      // </p> → paragraph break
 
-const md = (s) => {
-  if (!s) return '';
-  try {
-    const text = normalizeText(s);
-    if (typeof marked !== 'undefined') {
-      return marked.parse(text);
-    }
-    // Fallback: convert newlines to <br> manually
-    return text.replace(/\n/g, '<br>');
-  } catch(e) { return esc(s); }
-};
 
-const mdi = (s) => {
-  if (!s) return '';
-  try {
-    const text = normalizeText(s);
-    if (typeof marked !== 'undefined') {
-      return marked.parseInline(text);
-    }
-    return text.replace(/\n/g, '<br>');
-  } catch(e) { return esc(s); }
-};
 
 // ═══════════════════════════════════════════════════════════════════
 // SHUFFLE
@@ -1038,6 +1048,7 @@ if (IS_EMBED) {
   // Also fire once on load
   window.addEventListener('load', function() { setTimeout(notifyResize, 200); });
 }
+
 </script>
 </body>
 </html>
