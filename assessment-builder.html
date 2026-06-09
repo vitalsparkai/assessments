@@ -288,6 +288,41 @@ const fd=iso=>{
 };
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
+
+// ── MARKDOWN RENDERER (no external deps) ────────────────────────
+function inlineFmt(s) {
+  return String(s||'')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+
+function renderMd(s, inline) {
+  if (!s) return '';
+  let t = String(s)
+    .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/<p>\s*<\/p>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<p[^>]*>/gi, '').replace(/<\/p>/gi, '\n\n');
+  if (inline) return inlineFmt(t);
+  return t.split(/\n\n+/).map(para => {
+    para = para.trim(); if (!para) return '';
+    if (/^### /.test(para)) return '<h3>'+inlineFmt(para.slice(4))+'</h3>';
+    if (/^## /.test(para))  return '<h2>'+inlineFmt(para.slice(3))+'</h2>';
+    if (/^# /.test(para))   return '<h1>'+inlineFmt(para.slice(2))+'</h1>';
+    if (/^[-*] /m.test(para)) return '<ul>'+para.split('\n').filter(l=>l.trim()).map(l=>'<li>'+inlineFmt(l.replace(/^[-*] /,''))+'</li>').join('')+'</ul>';
+    if (/^\d+\. /m.test(para)) return '<ol>'+para.split('\n').filter(l=>l.trim()).map(l=>'<li>'+inlineFmt(l.replace(/^\d+\. /,''))+'</li>').join('')+'</ol>';
+    return '<p style="margin:0 0 0.8em">'+inlineFmt(para.replace(/\n/g,'<br>'))+'</p>';
+  }).join('');
+}
+
+const md  = s => renderMd(s, false);
+const mdi = s => renderMd(s, true);
+
+
 /* ══ DB ══ */
 /* ── AUTH STATE ─────────────────────────────────────────────────── */
 let _sb=null,_session=null,_tenantId=null,_userEmail='',_userName='',_userId=null;
@@ -1028,7 +1063,7 @@ function rQsTab(){
       return `<div class="sec-wrap">
         <div class="sec-head" onclick="togSec('${sec.id}')">
           <i class="ti ti-chevron-right sec-caret ${isOpen?'open':''}" style="font-size:13px;color:var(--muted)"></i>
-          <div class="sec-title">${esc(sec.title)||'Untitled Section'}</div>
+          <div class="sec-title">${mdi(sec.title)||'Untitled Section'}</div>
           <div class="sec-dimtags">
             ${secDims.slice(0,4).map(d=>`<span class="dim-tag"><span style="width:7px;height:7px;border-radius:50%;background:${esc(d.color||'#94a3b8')};display:inline-block"></span>${esc(d.name)}</span>`).join('')}
             ${secDims.length>4?`<span class="bdg bdft">+${secDims.length-4} more</span>`:''}
@@ -1054,7 +1089,7 @@ function rQItem(q,i,total,secId){
   const sqs=secId?(grouped_cache[secId]||[]):(qsBySec().ungrouped);
   return `<div class="qi">
     <div class="qi-ico"><i class="ti ${QIC[q.type]||'ti-question-mark'}"></i></div>
-    <div class="qi-inf"><div class="qi-tit">${esc(q.title)||'<em style="color:#94a3b8">Untitled</em>'}</div><div class="qi-sub">${QLA[q.type]||q.type}${(q.type==='multiple_choice'||q.type==='multi_select'||q.type==='ranking')?` \u00b7 ${(q.options||[]).length} option${(q.options||[]).length!==1?'s':''}`:''}</div></div>
+    <div class="qi-inf"><div class="qi-tit">${mdi(q.title)||'<em style="color:#94a3b8">Untitled</em>'}</div><div class="qi-sub">${QLA[q.type]||q.type}${(q.type==='multiple_choice'||q.type==='multi_select'||q.type==='ranking')?` \u00b7 ${(q.options||[]).length} option${(q.options||[]).length!==1?'s':''}`:''}</div></div>
     <div class="qi-act">
       <button class="btn bg bic bsm" onclick="mvQSec('${q.id}',-1,'${secId||''}')" ${i===0?'disabled':''}><i class="ti ti-arrow-up"></i></button>
       <button class="btn bg bic bsm" onclick="mvQSec('${q.id}',1,'${secId||''}')" ${i===total-1?'disabled':''}><i class="ti ti-arrow-down"></i></button>
@@ -1205,9 +1240,10 @@ function rTake(){
 
 function rQ(q,b,cr,br){
   const cs=`background:${esc(b.surfaceColor)};border:1px solid ${esc(b.borderColor)};border-radius:${cr}px;`;
-  if(q.type==='instruction')return`<div class="qcard" style="${cs}"><h2 style="font-size:22px;font-weight:700;color:${esc(b.textColor)};margin-bottom:12px">${esc(q.title)}</h2><p style="font-size:15px;line-height:1.75;color:${esc(b.textColor)};opacity:.7">${esc(q.description)}</p></div>`;
+  if(q.type==='instruction')return`<div class="qcard" style="${cs}"><h2 style="font-size:22px;font-weight:700;color:${esc(b.textColor)};margin-bottom:12px">${mdi(q.title)}</h2><p style="font-size:15px;line-height:1.75;color:${esc(b.textColor)};opacity:.7"><div class="md-content">${md(q.description)}</div></div>`;
+
   if(q.type==='contact_form'){
-    return `<div class="qcard" style="${cs}"><h2 style="font-size:19px;font-weight:700;color:${esc(b.textColor)};margin-bottom:14px">${esc(q.title)}</h2>
+    return `<div class="qcard" style="${cs}"><h2 style="font-size:19px;font-weight:700;color:${esc(b.textColor)};margin-bottom:14px">${mdi(q.title)}</h2>
     ${(q.contactFields||[]).map(f=>`<div style="margin-bottom:12px"><label style="display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:${esc(b.textColor)};opacity:.5;margin-bottom:4px">${esc(f.label)}${f.required?' *':''}</label>
       <input type="${esc(f.type||'text')}" id="cf-${esc(f.id)}" value="${esc(S.contact[f.label]||'')}" placeholder="${esc(f.label)}" style="width:100%;padding:10px 12px;border:1px solid ${esc(b.borderColor)};border-radius:${Math.max(2,br-2)}px;font-size:14px;font-family:inherit;color:${esc(b.textColor)};background:${esc(b.bgColor)};outline:none" oninput="S.contact['${esc(f.label)}']=this.value"></div>`).join('')}</div>`;
   }
@@ -1216,8 +1252,8 @@ function rQ(q,b,cr,br){
     if(!Array.isArray(S.answers[q.id])||S.answers[q.id].length!==opts.length)S.answers[q.id]=opts.map(o=>o.id);
     const order=S.answers[q.id];const oMap=Object.fromEntries(opts.map(o=>[o.id,o]));const n=order.length;
     return `<div class="qcard" style="${cs}">
-      <h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:6px">${esc(q.title)}</h2>
-      <p style="font-size:13px;color:${esc(b.textColor)};opacity:.55;margin-bottom:18px">${esc(q.description)||'Drag to reorder \u2014 most important at the top'}</p>
+      <h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:6px">${mdi(q.title)}</h2>
+      <p style="font-size:13px;color:${esc(b.textColor)};opacity:.55;margin-bottom:18px">${q.description ? mdi(q.description) : 'Drag to reorder \u2014 most important at the top'}</p>
       <div class="rank-list">
         ${order.map((optId,idx)=>{const opt=oMap[optId]||{text:optId};
           return `<div class="rank-item" data-opt="${optId}" draggable="true"
@@ -1239,16 +1275,16 @@ function rQ(q,b,cr,br){
   }
   if(q.type==='multiple_choice'){
     const sel=S.answers[q.id];
-    return `<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:16px">${esc(q.title)}</h2>
+    return `<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:16px">${mdi(q.title)}</h2>
     ${getOpts(q).map(opt=>`<button class="opt-btn hopt" onclick="slOp('${q.id}','${opt.id}')" style="border-color:${sel===opt.id?b.primaryColor:b.borderColor};background:${sel===opt.id?b.primaryColor+'18':b.surfaceColor};color:${sel===opt.id?b.primaryColor:b.textColor};border-radius:${Math.max(0,cr-4)}px">
       <div class="opt-c" style="border-color:${sel===opt.id?b.primaryColor:b.borderColor+'77'};background:${sel===opt.id?b.primaryColor:'transparent'}">${sel===opt.id?`<div style="width:7px;height:7px;border-radius:50%;background:white"></div>`:''}</div>${esc(opt.text)}</button>`).join('')}</div>`;
   }
   if(q.type==='multi_select'){
     const sel=Array.isArray(S.answers[q.id])?S.answers[q.id]:[];
-    return `<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:4px">${esc(q.title)}</h2><p style="font-size:13px;color:${esc(b.textColor)};opacity:.5;margin-bottom:16px">Select all that apply</p>
+    return `<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:4px">${mdi(q.title)}</h2><p style="font-size:13px;color:${esc(b.textColor)};opacity:.5;margin-bottom:16px">Select all that apply</p>
     ${getOpts(q).map(opt=>{const is=sel.includes(opt.id);return`<button class="opt-btn hopt" onclick="tgMs('${q.id}','${opt.id}')" style="border-color:${is?b.primaryColor:b.borderColor};background:${is?b.primaryColor+'18':b.surfaceColor};color:${is?b.primaryColor:b.textColor};border-radius:${Math.max(0,cr-4)}px"><div class="opt-ck" style="border-color:${is?b.primaryColor:b.borderColor+'77'};background:${is?b.primaryColor:'transparent'}">${is?`<i class="ti ti-check" style="font-size:11px;color:white"></i>`:''}</div>${esc(opt.text)}</button>`;}).join('')}</div>`;
   }
-  if(q.type==='text')return`<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:16px">${esc(q.title)}</h2><textarea rows="5" placeholder="Your answer..." oninput="S.answers['${q.id}']=this.value" style="width:100%;padding:12px;border:1px solid ${esc(b.borderColor)};border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;color:${esc(b.textColor)};background:${esc(b.bgColor)};outline:none">${esc(S.answers[q.id]||'')}</textarea></div>`;
+  if(q.type==='text')return`<div class="qcard" style="${cs}"><h2 style="font-size:18px;font-weight:700;color:${esc(b.textColor)};margin-bottom:16px">${mdi(q.title)}</h2><textarea rows="5" placeholder="Your answer..." oninput="S.answers['${q.id}']=this.value" style="width:100%;padding:12px;border:1px solid ${esc(b.borderColor)};border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;color:${esc(b.textColor)};background:${esc(b.bgColor)};outline:none">${esc(S.answers[q.id]||'')}</textarea></div>`;
   return '';
 }
 
