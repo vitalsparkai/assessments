@@ -33,7 +33,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;min-heigh
 .take-body{flex:1;display:flex;align-items:flex-start;justify-content:center;padding:48px 20px 24px}
 .qcard{border-radius:14px;padding:36px;max-width:620px;width:100%}
 .qcard h2{font-size:19px;font-weight:700;margin-bottom:6px;line-height:1.35}
-.qcard .qdesc{font-size:13px;opacity:.6;margin-bottom:20px;line-height:1.5}
+.qcard .qdesc{font-size:13px;opacity:.6;margin-bottom:20px;line-height:1.5}.qcard .qdesc img,.md-content img{opacity:1!important;filter:none!important}
 .opt-btn{width:100%;text-align:left;padding:12px 16px;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;transition:all .12s;margin-bottom:8px;display:flex;align-items:center;gap:10px;border:1.5px solid;outline:none;background:transparent}
 .opt-c{width:18px;height:18px;border-radius:50%;border:2px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .opt-ck{width:18px;height:18px;border-radius:4px;border:2px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px}
@@ -691,7 +691,7 @@ function rQ(q, brand) {
 
   if (q.type === 'instruction') return `<div class="qcard" style="${cs}">
     <h2 style="font-size:22px;font-weight:700;margin-bottom:14px">${mdi(q.title)}</h2>
-    ${q.description ? `<div class="md-content" style="font-size:15px;line-height:1.75;opacity:.7">${md(q.description)}</div>` : ''}
+    ${q.description ? `<div class="md-content" style="font-size:15px;line-height:1.75">${md(q.description)}</div>` : ''}
   </div>`;
 
   if (q.type === 'contact_form') {
