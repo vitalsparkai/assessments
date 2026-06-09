@@ -1004,7 +1004,7 @@ function rEd(){
 
 function rGen(asm){return `<div class="card" style="max-width:600px">
   <div class="fg"><label>Title</label><input type="text" id="g-t" value="${esc(asm.title)}"></div>
-  <div class="fg"><label>Description</label><textarea id="g-d" rows="3">${esc(asm.description)}</textarea></div>
+  <div class="fg"><label>Description</label><textarea id="g-d" rows="3">${asm.description||''} </textarea></div>
   <div class="fg"><label>Status</label><select id="g-s"><option value="draft" ${asm.status==='draft'?'selected':''}>Draft</option><option value="published" ${asm.status==='published'?'selected':''}>Published</option></select></div>
   <label class="tw mb4"><input type="checkbox" id="g-sh" ${asm.showResults?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Show results page to respondents after submission</span></label>
   <label class="tw mb4"><input type="checkbox" id="g-rt" ${asm.allowRetakes!==false?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Allow respondents to retake this assessment</span></label>
@@ -1334,7 +1334,7 @@ function rQMod(){
         </select></div>
       </div>
       <div class="fg"><label>${q.type==='instruction'?'Block Title':'Question / Prompt'}</label><input type="text" id="qm-ti" value="${esc(q.title||'')}" placeholder="What do you want to ask?"></div>
-      <div class="fg"><label>Description / Subtext (optional)</label><textarea id="qm-de" rows="2">${esc(q.description||'')}</textarea></div>
+      <div class="fg"><label>Description / Subtext (optional)</label><textarea id="qm-de" rows="3">${(q.description||'')}</textarea></div>
       ${q.type!=='instruction'?`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px">
       <label class="tw"><input type="checkbox" id="qm-rq" ${q.required!==false?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Required</span></label>
       ${(q.type==='multiple_choice'||q.type==='multi_select'||q.type==='ranking')?`<label class="tw"><input type="checkbox" id="qm-sh" ${q.shuffleOptions?'checked':''}><div class="tt"><div class="tk"></div></div><span class="tsm">Shuffle answers</span></label>`:''}
