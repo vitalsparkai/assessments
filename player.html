@@ -553,33 +553,36 @@ const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 
 // md() — renders markdown AND raw HTML in content fields
 // Used for question titles, descriptions, option text, section text
+// Configure marked once
+if (typeof marked !== 'undefined') {
+  marked.setOptions({ breaks: true, gfm: true });
+}
+
+// Normalize stored text — fix escaped newlines from JSON storage
+const normalizeText = (s) => String(s ?? '')
+  .replace(/\\n/g, '\n')   // literal \n → real newline
+  .replace(/\\t/g, '\t');  // literal \t → real tab
+
 const md = (s) => {
   if (!s) return '';
   try {
-    // If marked is loaded use it, otherwise fall back to basic HTML pass-through
+    const text = normalizeText(s);
     if (typeof marked !== 'undefined') {
-      return marked.parse(String(s), {
-        breaks: true,      // single newline = <br>
-        gfm: true,         // github-flavoured markdown
-        mangle: false,
-        headerIds: false,
-      });
+      return marked.parse(text);
     }
-    // Fallback: just allow HTML through (don't escape)
-    return String(s);
-  } catch(e) {
-    return esc(s); // safety fallback
-  }
+    // Fallback: convert newlines to <br> manually
+    return text.replace(/\n/g, '<br>');
+  } catch(e) { return esc(s); }
 };
 
-// mdi() — inline markdown (no wrapping <p> tag) for short labels
 const mdi = (s) => {
   if (!s) return '';
   try {
+    const text = normalizeText(s);
     if (typeof marked !== 'undefined') {
-      return marked.parseInline(String(s), { breaks: true, gfm: true });
+      return marked.parseInline(text);
     }
-    return String(s);
+    return text.replace(/\n/g, '<br>');
   } catch(e) { return esc(s); }
 };
 
