@@ -245,7 +245,7 @@ tr:hover td{background:#fafbff}
 /* ── CONFIG — update these three values ── */
 const SUPABASE_URL      = 'https://owouiukkteoentgpbrlk.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93b3VpdWtrdGVvZW50Z3BicmxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjQxNzcsImV4cCI6MjA5NTM0MDE3N30.NOPj0iARb1bExfBv2t8KvFktLTisp2OPE95dM_C7TJw';
-const APP_URL           = 'https://assessments.vitalspark.ai';
+const APP_URL           = window.location.origin  // dynamic — each deployment uses its own domain;
 </script>
   <script>
   // Load instance config (injected by nginx from INSTANCE_ID env var)
