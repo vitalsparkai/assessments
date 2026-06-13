@@ -2421,6 +2421,9 @@ function evalFormula(formula, dimId, scores, dims, dimMaxes) {
   expr = expr.replace(/\bAvg\(/gi, '__avg(');
   expr = expr.replace(/\bSum\(/gi, '__sum(');
   expr = expr.replace(/\bAbs\(/gi, 'Math.abs(');
+  expr = expr.replace(/\bCount\(/gi, '__count(');
+  expr = expr.replace(/\bCountMax\(/gi, '__countMax(');
+  expr = expr.replace(/\bCountMin\(/gi, '__countMin(');
 
   // Implicit <self>: if expr starts with comparison operator, prepend self score
   if (/^\s*[><!=]/.test(expr)) {
@@ -2431,10 +2434,13 @@ function evalFormula(formula, dimId, scores, dims, dimMaxes) {
   expr = expr.replace(/([^><!=])=([^>=])/g, '$1==$2');
 
   try {
-    var fn = new Function('__avg','__sum','return (' + expr + ')');
+    var fn = new Function('__avg','__sum','__count','__countMax','__countMin','return (' + expr + ')');
     var result = fn(
       function() { var a=Array.from(arguments); return a.reduce(function(s,v){return s+v;},0)/a.length; },
-      function() { var a=Array.from(arguments); return a.reduce(function(s,v){return s+v;},0); }
+      function() { var a=Array.from(arguments); return a.reduce(function(s,v){return s+v;},0); },
+      function() { var a=Array.from(arguments); return a.filter(function(v){return v!==0;}).length; },
+      function() { var a=Array.from(arguments); var mx=Math.max.apply(null,a); return a.filter(function(v){return v===mx;}).length; },
+      function() { var a=Array.from(arguments); var mn=Math.min.apply(null,a); return a.filter(function(v){return v===mn;}).length; }
     );
     return Boolean(result);
   } catch(e) {
