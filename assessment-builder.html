@@ -1372,7 +1372,18 @@ function rQMod(){
   if(q.type==='contact_form'){
     const cfs=q.contactFields||[];
     optsHtml=`<div class="fg"><div class="fx ic jb mb2"><label style="margin-bottom:0">Contact Fields</label><button class="btn bs bsm" onclick="addCF()"><i class="ti ti-plus"></i> Add Field</button></div>
-    ${cfs.map((f,i)=>`<div class="cfr"><input type="text" value="${esc(f.label)}" onchange="updCF(${i},'label',this.value)" placeholder="Label" style="flex:2"><select onchange="updCF(${i},'type',this.value)" style="flex:1"><option value="text" ${f.type==='text'?'selected':''}>Text</option><option value="email" ${f.type==='email'?'selected':''}>Email</option><option value="tel" ${f.type==='tel'?'selected':''}>Phone</option></select><label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;cursor:pointer"><input type="checkbox" ${f.required?'checked':''} onchange="updCF(${i},'required',this.checked)"> Req</label><button class="btn bd bic bsm" onclick="rmCF(${i})"><i class="ti ti-trash"></i></button></div>`).join('')}</div>`;
+    ${cfs.map((f,i)=>`<div class="cfr"><input type="text" value="${esc(f.label)}" onchange="updCF(${i},'label',this.value)" placeholder="Label" style="flex:2"><select onchange="updCF(${i},'type',this.value)" style="flex:1">
+              <option value="text"        ${f.type==='text'?'selected':''}>Text</option>
+              <option value="textarea"    ${f.type==='textarea'?'selected':''}>Multi-Line Text</option>
+              <option value="email"       ${f.type==='email'?'selected':''}>Email</option>
+              <option value="tel"         ${f.type==='tel'?'selected':''}>Phone</option>
+              <option value="date"        ${f.type==='date'?'selected':''}>Date Picker</option>
+              <option value="radio"       ${f.type==='radio'?'selected':''}>Radio</option>
+              <option value="select"      ${f.type==='select'?'selected':''}>Dropdown (Single)</option>
+              <option value="multiselect" ${f.type==='multiselect'?'selected':''}>Dropdown (Multi)</option>
+              <option value="checkbox"    ${f.type==='checkbox'?'selected':''}>Checkbox (Multi)</option>
+            </select>
+            ${(f.type==='radio'||f.type==='select'||f.type==='multiselect'||f.type==='checkbox')?`<input type="text" value="${esc(f.options||'')}" onchange="updCF(${i},'options',this.value)" placeholder="Options: A, B, C" style="flex:3;font-size:11px">`:``}<label style="display:flex;align-items:center;gap:4px;font-size:12px;white-space:nowrap;cursor:pointer"><input type="checkbox" ${f.required?'checked':''} onchange="updCF(${i},'required',this.checked)"> Req</label><button class="btn bd bic bsm" onclick="rmCF(${i})"><i class="ti ti-trash"></i></button></div>`).join('')}</div>`;
   }
 
   return `<div class="mov" onclick="bgC(event)"><div class="modal mw">
