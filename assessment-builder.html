@@ -1261,8 +1261,7 @@ function rQ(q,b,cr,br){
 
   if(q.type==='contact_form'){
     return `<div class="qcard" style="${cs}"><h2 style="font-size:19px;font-weight:700;color:${esc(b.textColor)};margin-bottom:14px">${mdi(q.title)}</h2>
-    ${(q.contactFields||[]).map(f=>`<div style="margin-bottom:12px"><label style="display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:${esc(b.textColor)};opacity:.5;margin-bottom:4px">${esc(f.label)}${f.required?' *':''}</label>
-      <input type="${esc(f.type||'text')}" id="cf-${esc(f.id)}" value="${esc(S.contact[f.label]||'')}" placeholder="${esc(f.label)}" style="width:100%;padding:10px 12px;border:1px solid ${esc(b.borderColor)};border-radius:${Math.max(2,br-2)}px;font-size:14px;font-family:inherit;color:${esc(b.textColor)};background:${esc(b.bgColor)};outline:none" oninput="S.contact['${esc(f.label)}']=this.value"></div>`).join('')}</div>`;
+    ${(q.contactFields||[]).map(f=>renderCF(f,b,function(lbl){return S.contact[lbl]||'';},function(lbl,v){return "S.contact['"+esc(lbl)+"']="+v;})).join('')}</div>`;
   }
   if(q.type==='ranking'){
     const opts=getOpts(q);
@@ -1778,6 +1777,61 @@ function updODim(oi,oldDimId,newDimId){
 function updOScore(oi,dimId,v){const opt=S.modal.data.options[oi];if(opt){if(!opt.scores)opt.scores={};opt.scores[dimId]=Number(v)||0;}}
 function rmODim(oi,dimId){const opt=S.modal.data.options[oi];if(opt?.scores)delete opt.scores[dimId];render();}
 
+
+function renderCF(f, brand, getVal, setVal) {
+  var br2 = Math.max(2, parseInt(brand.btnRadius||8) - 2);
+  var bc  = brand.borderColor;
+  var tc  = brand.textColor;
+  var bg  = brand.bgColor;
+  var pc  = brand.primaryColor;
+  var baseStyle = 'width:100%;padding:10px 12px;border:1px solid '+bc+';border-radius:'+br2+'px;font-size:14px;font-family:inherit;color:'+tc+';background:'+bg+';outline:none;box-sizing:border-box';
+  var lbl = '<label style="display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:'+tc+';opacity:.5;margin-bottom:4px">'+esc(f.label)+(f.required?' *':'')+'</label>';
+  var val = getVal(f.label) || '';
+  var opts = (f.options||'').split(',').map(function(o){ return o.trim(); }).filter(Boolean);
+  var id = 'cf-'+f.id;
+  var input = '';
+
+  if (f.type === 'textarea') {
+    var sv = String(setVal(f.label,'this.value'));
+    input = '<textarea id="'+id+'" rows="3" placeholder="'+esc(f.label)+'" style="'+baseStyle+';resize:vertical" oninput="'+sv+'">'+esc(val)+'</textarea>';
+  } else if (f.type === 'date') {
+    input = '<input type="date" id="'+id+'" value="'+esc(val)+'" style="'+baseStyle+'" onchange="S.contact[\''+esc(f.label)+'\']=this.value">';
+  } else if (f.type === 'radio') {
+    input = '<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">'+opts.map(function(o){
+      return '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:'+tc+'">'
+        +'<input type="radio" name="'+id+'" value="'+esc(o)+'" '+(val===o?'checked':'')+' onchange="S.contact[\''+esc(f.label)+'\']=this.value" style="accent-color:'+pc+'"> '+esc(o)+'</label>';
+    }).join('')+'</div>';
+  } else if (f.type === 'select') {
+    input = '<select id="'+id+'" style="'+baseStyle+'" onchange="S.contact[\''+esc(f.label)+'\']=this.value">'
+      +'<option value="">Select...</option>'
+      +opts.map(function(o){ return '<option value="'+esc(o)+'" '+(val===o?'selected':'')+'>'+esc(o)+'</option>'; }).join('')
+      +'</select>';
+  } else if (f.type === 'multiselect' || f.type === 'checkbox') {
+    var selArr = val ? val.split('||') : [];
+    var wrapStyle = f.type === 'multiselect'
+      ? 'border:1px solid '+bc+';border-radius:'+br2+'px;overflow:hidden'
+      : 'display:flex;flex-direction:column;gap:6px;margin-top:4px';
+    var itemStyle = f.type === 'multiselect'
+      ? 'display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:14px;color:'+tc+';border-bottom:1px solid '+bc
+      : 'display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:'+tc;
+    input = '<div style="'+wrapStyle+'">'+opts.map(function(o){
+      var chk = selArr.indexOf(o) >= 0;
+      return '<label style="'+itemStyle+'">'
+        +'<input type="checkbox" class="cf-multi" data-field="'+esc(f.label)+'" value="'+esc(o)+'" '+(chk?'checked':'')+' onchange="cfMultiChange(this)" style="accent-color:'+pc+'"> '+esc(o)+'</label>';
+    }).join('')+'</div>';
+  } else {
+    input = '<input type="'+esc(f.type||'text')+'" id="'+id+'" value="'+esc(val)+'" placeholder="'+esc(f.label)+'" style="'+baseStyle+'" oninput="S.contact[\''+esc(f.label)+'\']=this.value">';
+  }
+  return '<div style="margin-bottom:14px">'+lbl+input+'</div>';
+}
+
+function cfMultiChange(el) {
+  var fieldLabel = el.getAttribute('data-field');
+  var all = document.querySelectorAll('.cf-multi[data-field="'+fieldLabel+'"]:checked');
+  var vals = Array.from(all).map(function(cb){ return cb.value; });
+  S.contact[fieldLabel] = vals.join('||');
+}
+
 function addCF(){S.modal.data.contactFields=[...(S.modal.data.contactFields||[]),{id:uid(),label:'',type:'text',required:false}];render();}
 function updCF(i,k,v){if(S.modal.data.contactFields[i])S.modal.data.contactFields[i][k]=v;}
 function rmCF(i){S.modal.data.contactFields.splice(i,1);render();}
@@ -1927,7 +1981,12 @@ function nxSt(){
   if(q.required){
     if(q.type==='multiple_choice'&&!S.answers[q.id]){toast('Please select an answer','err');return;}
     if(q.type==='multi_select'&&(!S.answers[q.id]||!S.answers[q.id].length)){toast('Please select at least one option','err');return;}
-    if(q.type==='contact_form'){(q.contactFields||[]).forEach(f=>{const el=document.getElementById('cf-'+f.id);if(el)S.contact[f.label]=el.value;});for(const f of(q.contactFields||[])){if(f.required&&!S.contact[f.label]){toast(`Please fill in "${f.label}"`,'err');return;}}}
+    if(q.type==='contact_form'){(q.contactFields||[]).forEach(f=>{
+    const id='cf-'+f.id;
+    if(f.type==='textarea'||f.type==='date'||f.type==='select'||f.type==='email'||f.type==='tel'||f.type==='text'||!f.type){
+      const el=document.getElementById(id);if(el)S.contact[f.label]=el.value;
+    }else if(f.type==='radio'){const el=document.querySelector('input[name="'+id+'"]:checked');if(el)S.contact[f.label]=el.value;}
+  });for(const f of(q.contactFields||[])){if(f.required&&!S.contact[f.label]){toast(`Please fill in "${f.label}"`,'err');return;}}}
   }else if(q.type==='contact_form')(q.contactFields||[]).forEach(f=>{const el=document.getElementById('cf-'+f.id);if(el)S.contact[f.label]=el.value;});
   if(S.step<qs.length-1){S.step++;render();window.scrollTo(0,0);}else sbmA();
 }
