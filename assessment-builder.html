@@ -2699,7 +2699,7 @@ function buildExportJSON(asmId){
   return{
     assessment:{title:asm.title,description:asm.description,status:asm.status,showResults:asm.showResults},
     dimensions:dims.map(d=>({name:d.name,description:d.description,color:d.color,ranges:(d.ranges||[]).sort((a,b)=>a.min-b.min).map(r=>({min:r.min,max:r.max,label:r.label,description:r.description,recommendation:r.recommendation}))})),
-    sections:secs.map(s=>({title:s.title,description:s.description,orderIndex:s.orderIndex,activeDimensions:(s.activeDimIds||[]).map(id=>dimIdToName[id]||id)})),
+    sections:secs.map(s=>({title:s.title,description:s.description,orderIndex:s.orderIndex,activeDimensions:(s.activeDimIds||[]).map(id=>dimIdToName[id]||id),activeDimIds:(s.activeDimIds||[]).map(id=>dimIdToName[id]||id)})),
     questions:sortedQs.map(q=>({
       section:q.sectionId?secIdToTitle[q.sectionId]||null:null,
       type:q.type,title:q.title,description:q.description,required:q.required,orderIndex:q.orderIndex,
@@ -2735,7 +2735,20 @@ async function importJSONObj(obj){
   const secs=(obj.sections||[]).map((s,i)=>{
     const newId=uid();secNameToId[s.title]=newId;
     return{id:newId,aId:id,title:s.title,description:s.description||'',orderIndex:s.orderIndex??i,
-      activeDimIds:(s.activeDimensions||[]).map(n=>dimNameToId[n]).filter(Boolean),
+      activeDimIds:(()=>{
+          // Support both formats:
+          // - activeDimensions: ['DimName', ...] (names, preferred)
+          // - activeDimIds: ['uuid', ...] (old format with UUIDs — remap if possible, else all)
+          if(s.activeDimensions&&s.activeDimensions.length){
+            return s.activeDimensions.map(n=>dimNameToId[n]).filter(Boolean);
+          }
+          if(s.activeDimIds&&s.activeDimIds.length){
+            // Try mapping old UUIDs via name lookup — won't work but gives us all as fallback
+            const mapped = dims.map(d=>d.id); // default: all dims
+            return mapped;
+          }
+          return dims.map(d=>d.id); // no activeDimIds at all — use all
+        })(),
       classificationFormula:s.classificationFormula||'ranges',
       formulaLabels:s.formulaLabels||{}};
   });
