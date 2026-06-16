@@ -115,7 +115,6 @@ input, textarea { -webkit-appearance: none; border-radius: 0; }
 <div id="toast-r"></div>
 
 <script>
-
 'use strict';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -160,9 +159,14 @@ async function sbGet(table, params = '') {
 }
 
 async function sbUpdate(table, query, data) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+  const r = await fetch(`${CFG.supabaseUrl}/rest/v1/${table}?${query}`, {
     method: 'PATCH',
-    headers: _hdrs({ Prefer: 'return=minimal' }),
+    headers: {
+      'apikey': CFG.supabaseKey,
+      'Authorization': 'Bearer ' + CFG.supabaseKey,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal',
+    },
     body: JSON.stringify(data)
   });
   if (!r.ok) { const t = await r.text(); throw new Error(t); }
@@ -327,6 +331,595 @@ function evalFormula(formula, dimId, rawScores, dims, dimMaxes) {
   } catch(e) { return false; }
 }
 
+
+
+// Compute max possible score for a dimension from questions
+function mxSc(qs, dId) {
+  var m = 0;
+  (qs || []).forEach(function(q) {
+    if (q.type === 'multiple_choice') {
+      var sc = (q.options||[]).map(function(o){ return Number((o.scores||{})[dId]||0); });
+      if (sc.length) m += Math.max.apply(null, [0].concat(sc));
+    }
+    if (q.type === 'multi_select') {
+      (q.options||[]).forEach(function(o){ var s=Number((o.scores||{})[dId]||0); if(s>0) m+=s; });
+    }
+    if (q.type === 'ranking') {
+      // Supabase returns snake_case; builder in-memory uses camelCase — support both
+      var weights = q.position_weights || q.positionWeights || [];
+      var maxW = weights.length ? Math.max.apply(null, weights) : 1;
+      (q.options||[]).forEach(function(o){ var s=Number((o.scores||{})[dId]||0); if(s>0) m+=s*maxW; });
+    }
+  });
+  return m;
+}
+
+function classifyAll(rawScores) {
+  const overrides = {};
+  if (!S._hiddenDims) S._hiddenDims = new Set();
+
+
+  (SECS || []).forEach(sec => {
+    const formula = sec.classification_formula || sec.classificationFormula || 'ranges';
+    const fl = sec.formula_labels || sec.formulaLabels || {};
+
+    const secDimIds2 = sec.active_dim_ids || sec.activeDimIds || [];
+    const secDimsAll = DIMS.filter(d => secDimIds2.includes(d.id));
+
+    // formulaTiers takes priority — user-written expressions
+    const formulaTiers = fl.formulaTiers;
+    if (formulaTiers && formulaTiers.length) {
+      // Pre-compute max possible score per dim from questions
+      const dimMaxes = {};
+      secDimsAll.forEach(d => { dimMaxes[d.id] = mxSc(QS_ORDERED, d.id) || 100; });
+      // Evaluate tiers in order; first match wins per dimension
+      const matched = new Set();
+      formulaTiers.forEach(tier => {
+        if (!tier.formula || !tier.label) return;
+        secDimsAll.forEach(d => {
+          if (matched.has(d.id)) return; // already classified by higher-priority tier
+          if (evalFormula(tier.formula, d.id, rawScores, secDimsAll, dimMaxes)) {
+            overrides[d.id] = { label: tier.label, description: tier.description||'', recommendation: tier.recommendation||'' };
+            matched.add(d.id);
+          }
+        });
+      });
+      return;
+    }
+
+    if (formula === 'ranges') {
+      const staticTiers = fl.staticTiers;
+      if (!staticTiers || !staticTiers.length) return;
+      secDimsAll.forEach(d => {
+        const s = rawScores[d.id] || 0;
+        const ranges = (d.ranges || []).slice().sort((a,b) => a.min - b.min);
+        let rIdx = ranges.findIndex(r => s >= r.min && s <= r.max);
+        if (rIdx < 0) rIdx = s < (ranges[0]?.min||0) ? 0 : ranges.length - 1;
+        const tier = staticTiers[rIdx];
+        if (tier && tier.label) {
+          overrides[d.id] = { label: tier.label, description: tier.description||'', recommendation: tier.recommendation||'' };
+        }
+      });
+      return;
+    }
+
+    const secDimIds = secDimIds2;
+    const secDims = secDimsAll;
+    if (!secDims.length) return;
+
+    // ── PT Delta Formula ───────────────────────────────────────────
+    if (formula === 'pt_delta') {
+      const pcts = {};
+      secDims.forEach(d => {
+        const mx = PT_MAX_SCORES[d.name] || PT_DEFAULT_MAX;
+        pcts[d.id] = ((rawScores[d.id] || 0) / mx) * 100;
+      });
+      const maxPct = Math.max(...Object.values(pcts));
+
+      secDims.forEach(d => {
+        const pct = pcts[d.id];
+        let label = null, desc = '', rec = '';
+        if (pct >= maxPct - 1.5) {
+          label = 'Personality Type';
+          desc  = 'Core expression of who you are';
+          rec   = 'Own this type fully — it is your natural strength and signature.';
+        } else if (pct >= 65) {
+          label = 'Highly Impacting Type';
+          desc  = 'Significantly shapes your behavior and decisions';
+          rec   = 'Lean into this type in contexts where it is an asset.';
+        } else if (pct >= 37) {
+          label = 'Secondary Type';
+          desc  = 'A background influence on how you show up';
+          rec   = 'Notice when this type activates and leverage it intentionally.';
+        }
+        if (label) {
+          overrides[d.id] = { label, description: desc, recommendation: rec };
+        } else {
+          S._hiddenDims.add(d.id); // below threshold — suppress from results
+        }
+      });
+    }
+
+    // ── Relative Max Formula ───────────────────────────────────────
+    else if (formula === 'relative_max') {
+      const rawSec = {};
+      secDims.forEach(d => { rawSec[d.id] = rawScores[d.id] || 0; });
+      const maxRaw = Math.max(...Object.values(rawSec));
+      const THRESHOLD = 4;
+      const SIG_FLOOR = maxRaw * 0.4;
+      const belowMax = Object.values(rawSec).filter(v => v < maxRaw && v > SIG_FLOOR);
+      const secondMax = belowMax.length ? Math.max(...belowMax) : -1;
+
+      secDims.forEach(d => {
+        const s = rawSec[d.id];
+        let label = null;
+        if (s >= maxRaw - THRESHOLD) {
+          label = 'Primary';
+        } else if (secondMax > -1 && s >= secondMax - THRESHOLD && s < maxRaw - THRESHOLD) {
+          label = 'Secondary';
+        }
+        if (label) {
+          overrides[d.id] = {
+            label,
+            description: `${label} ${d.name} expression`,
+            recommendation: label === 'Primary'
+              ? `This is your dominant pattern — understand it deeply to improve your relationships.`
+              : `This secondary pattern activates in certain situations — notice when it shows up.`
+          };
+        }
+      });
+
+      // ── Attachment special combos ──────────────────────────────
+      const byName = Object.fromEntries(secDims.map(d => [d.name, d]));
+      const primaryIds = secDims.filter(d => overrides[d.id]?.label === 'Primary').map(d => d.name);
+      if (primaryIds.includes('Anxious') && primaryIds.includes('Avoidant')) {
+        ['Anxious','Avoidant'].forEach(n => { if (byName[n]) delete overrides[byName[n].id]; });
+        const target = byName['Anxious'] || secDims[0];
+        overrides[target.id] = { label: 'Anxious-Avoidant', description: 'Primary mixed attachment: both anxious and avoidant tendencies are dominant', recommendation: 'Working with a therapist on attachment patterns will be highly impactful for you.' };
+      } else if (primaryIds.includes('Anxious-Secure') && primaryIds.includes('Avoidant-Secure')) {
+        ['Anxious-Secure','Avoidant-Secure'].forEach(n => { if (byName[n]) delete overrides[byName[n].id]; });
+        const target = byName['Anxious-Secure'] || secDims[0];
+        overrides[target.id] = { label: 'Anxious-Avoidant / Secure', description: 'A complex blend showing both anxious-secure and avoidant-secure tendencies', recommendation: 'Explore your attachment patterns with a coach or therapist.' };
+      }
+    }
+  });
+
+  return overrides;
+}
+
+
+function visibleDims() {
+  return DIMS.filter(d => d.show_in_results !== false);
+}
+function maxScore(dimId) {
+  let m = 0;
+  QS_ORDERED.forEach(q => {
+    if (q.type === 'multiple_choice') {
+      const sc = (q.options || []).map(o => Number(o.scores?.[dimId] || 0));
+      if (sc.length) m += Math.max(0, ...sc);
+    }
+    if (q.type === 'multi_select') {
+      (q.options || []).forEach(o => { const s = Number(o.scores?.[dimId] || 0); if (s > 0) m += s; });
+    }
+    if (q.type === 'ranking') {
+      const opts = q.options || []; const n = opts.length;
+      const weights = q.position_weights?.length === n ? q.position_weights : Array.from({length: n}, (_, i) => n - i);
+      const maxW = n ? Math.max(...weights) : 0;
+      const maxS = Math.max(0, ...opts.map(o => Number(o.scores?.[dimId] || 0)));
+      m += maxS * maxW;
+    }
+  });
+  return m || 1;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════════
+// Pre-populate contact from URL params if provided by host page
+const _urlContact = {};
+if (URL_EMAIL)  _urlContact['Email'] = URL_EMAIL;
+if (URL_NAME)   { _urlContact['First Name'] = URL_NAME.split(' ')[0]; _urlContact['Last Name'] = URL_NAME.split(' ').slice(1).join(' '); }
+if (URL_USERID) _urlContact['User ID'] = URL_USERID;
+
+const S = { step: 0, answers: {}, contact: {..._urlContact}, submitted: false, shuffledOrders: {}, _hiddenDims: new Set() };
+let _drag = null;
+
+// ═══════════════════════════════════════════════════════════════════
+// EMBED COMMUNICATION
+// ═══════════════════════════════════════════════════════════════════
+var _lastSentH = 0;
+var _resizeTimer = null;
+function notifyResize() {
+  if (!IS_EMBED) return;
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(function() {
+    // Measure the inner content wrapper, not document (which includes iframe padding)
+    var inner = document.getElementById('vs-inner') || document.querySelector('.vs-wrap') || document.body;
+    var h = inner.getBoundingClientRect().height || inner.offsetHeight;
+    // Only send if content grew by more than 20px — never shrinks (prevents loop)
+    if (h > _lastSentH + 20) {
+      _lastSentH = h;
+      window.parent.postMessage({ type: 'vs:resize', height: h, assessmentId: ASM_ID }, '*');
+    }
+  }, 150); // debounce 150ms
+}
+
+function notifyComplete() {
+  if (IS_EMBED) {
+    window.parent.postMessage({ type: 'vs:complete', assessmentId: ASM_ID, redirect: REDIRECT }, '*');
+  } else if (REDIRECT) {
+    setTimeout(() => { window.location.href = REDIRECT; }, 2000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BRAND HELPERS
+// ═══════════════════════════════════════════════════════════════════
+const DB = { primaryColor:'#2563eb', bgColor:'#f8fafc', textColor:'#1e293b', surfaceColor:'#ffffff', borderColor:'#e2e8f0', logoUrl:'', fontFamily:'system-ui, sans-serif', btnRadius:'8', cardRadius:'12' };
+const b = () => ({ ...DB, ...(ASM?.brand || {}) });
+const br = () => parseInt(b().btnRadius) || 8;
+const cr = () => parseInt(b().cardRadius) || 12;
+
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+// ── MARKDOWN RENDERER (no external deps) ────────────────────────
+function inlineFmt(s) {
+  return String(s||'')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+
+function renderMd(s, inline) {
+  if (!s) return '';
+  let t = String(s)
+    .replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/<p>\s*<\/p>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<p[^>]*>/gi, '').replace(/<\/p>/gi, '\n\n');
+  if (inline) return inlineFmt(t);
+  return t.split(/\n\n+/).map(para => {
+    para = para.trim(); if (!para) return '';
+    if (/^### /.test(para)) return '<h3>'+inlineFmt(para.slice(4))+'</h3>';
+    if (/^## /.test(para))  return '<h2>'+inlineFmt(para.slice(3))+'</h2>';
+    if (/^# /.test(para))   return '<h1>'+inlineFmt(para.slice(2))+'</h1>';
+    if (/^[-*] /m.test(para)) return '<ul>'+para.split('\n').filter(l=>l.trim()).map(l=>'<li>'+inlineFmt(l.replace(/^[-*] /,''))+'</li>').join('')+'</ul>';
+    if (/^\d+\. /m.test(para)) return '<ol>'+para.split('\n').filter(l=>l.trim()).map(l=>'<li>'+inlineFmt(l.replace(/^\d+\. /,''))+'</li>').join('')+'</ol>';
+    return '<p style="margin:0 0 0.8em">'+inlineFmt(para.replace(/\n/g,'<br>'))+'</p>';
+  }).join('');
+}
+
+const md  = s => renderMd(s, false);
+const mdi = s => renderMd(s, true);
+
+
+// md() — renders markdown AND raw HTML in content fields
+// Used for question titles, descriptions, option text, section text
+
+
+// Normalize stored text — handle legacy HTML workarounds + escaped newlines
+const normalizeText = (s) => String(s ?? '')
+  .replace(/\\n/g, '\n')            // literal \n string → real newline
+  .replace(/\\t/g, '\t')            // literal \t string → real tab
+  .replace(/<p>\s*<\/p>/gi, '\n\n') // <p></p> → blank line (paragraph break)
+  .replace(/<br\s*\/?>/gi, '\n')     // <br> → newline
+  .replace(/<\/p>\s*<p>/gi, '\n\n') // </p><p> → paragraph break
+  .replace(/<p>/gi, '')               // strip remaining <p>
+  .replace(/<\/p>/gi, '\n\n');      // </p> → paragraph break
+
+
+
+// ═══════════════════════════════════════════════════════════════════
+// SHUFFLE
+function seededShuffle(arr, seed) {
+  const a = [...arr]; let s = seed;
+  for (let i = a.length - 1; i > 0; i--) {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    const j = Math.abs(s) % (i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function getOpts(q) {
+  const opts = q.options || [];
+  if (!q.shuffle_options || !opts.length) return opts;
+  if (!S.shuffledOrders[q.id]) {
+    const seed = q.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) + Date.now() % 9999;
+    S.shuffledOrders[q.id] = seededShuffle(opts.map(o => o.id), seed);
+  }
+  return S.shuffledOrders[q.id].map(id => opts.find(o => o.id === id)).filter(Boolean);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════════
+function render() {
+  const root = document.getElementById('root');
+  if (S.submitted) {
+    root.innerHTML = rResults();
+  } else {
+    root.innerHTML = rTake();
+  }
+  applyBodyBrand();
+  requestAnimationFrame(() => { notifyResize(); });
+}
+
+function applyBodyBrand() {
+  const brand = b();
+  document.body.style.background = brand.bgColor;
+  document.body.style.fontFamily  = brand.fontFamily;
+  document.body.style.color       = brand.textColor;
+  if (!document.getElementById('vs-hover-style')) {
+    const s = document.createElement('style');
+    s.id = 'vs-hover-style';
+    document.head.appendChild(s);
+  }
+  document.getElementById('vs-hover-style').textContent =
+    `.opt-btn:hover { border-color: ${brand.primaryColor} !important; background: ${brand.primaryColor}14 !important; }`;
+}
+
+function rTake() {
+  const brand = b();const q = QS_ORDERED[S.step];const total = QS_ORDERED.length;
+  const pct = Math.round((S.step / total) * 100);
+  return `
+    <div class="take-wrap" style="background:${esc(brand.bgColor)};color:${esc(brand.textColor)}">
+      <div class="take-bar" style="background:${esc(brand.surfaceColor)};border-bottom-color:${esc(brand.borderColor)}">
+        <div class="take-bar-inner">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            ${brand.logoUrl
+              ? `<img src="${esc(brand.logoUrl)}" class="take-logo" onerror="this.style.display='none'" alt="">`
+              : `<div class="take-logo-text" style="color:${esc(brand.primaryColor)}">${esc(ASM.title)}</div>`}
+            <span class="take-meta" style="color:${esc(brand.textColor)}">${S.step + 1} / ${total}</span>
+          </div>
+          <div class="take-prog-wrap" style="background:${esc(brand.borderColor)}">
+            <div class="take-prog-fill" style="width:${pct}%;background:${esc(brand.primaryColor)}"></div>
+          </div>
+        </div>
+      </div>
+      <div class="take-body">${rQ(q, brand)}</div>
+      <div class="take-nav" style="background:${esc(brand.surfaceColor)};border-top:1px solid ${esc(brand.borderColor)}">
+        <div class="take-nav-inner">
+          <button class="tg" onclick="prevStep()" ${S.step === 0 ? 'disabled' : ''} style="color:${esc(brand.textColor)}">
+            <i class="ti ti-arrow-left"></i> Back
+          </button>
+          <div class="pdots">${QS_ORDERED.map((_, i) =>
+            `<div class="pdot" style="background:${i === S.step ? brand.primaryColor : i < S.step ? brand.primaryColor + '44' : brand.borderColor}"></div>`
+          ).join('')}</div>
+          <button class="tp" onclick="nextStep()" style="background:${esc(brand.primaryColor)};border-radius:${br()}px">
+            ${S.step === total - 1 ? '<i class="ti ti-check"></i> Submit' : 'Next <i class="ti ti-arrow-right"></i>'}
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function rQ(q, brand) {
+  const cardR = cr(); const btnR = br();
+  const cs = `background:${esc(brand.surfaceColor)};border:1px solid ${esc(brand.borderColor)};border-radius:${cardR}px;color:${esc(brand.textColor)}`;
+
+  if (q.type === 'instruction') return `<div class="qcard" style="${cs}">
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:14px">${mdi(q.title)}</h2>
+    ${q.description ? `<div class="md-content" style="font-size:15px;line-height:1.75">${md(q.description)}</div>` : ''}
+  </div>`;
+
+  if (q.type === 'contact_form') {
+    const fields = q.contact_fields || [];
+    return `<div class="qcard" style="${cs}">
+      <h2 style="font-size:19px;font-weight:700;margin-bottom:16px">${mdi(q.title)}</h2>
+      ${fields.map(f => `<div style="margin-bottom:14px">
+        <label class="cf-label" style="color:${esc(brand.textColor)}">${esc(f.label)}${f.required ? ' *' : ''}</label>
+        <input type="${esc(f.type || 'text')}" id="cf_${esc(f.label.replace(/\s+/g,'_'))}"
+          value="${esc(S.contact[f.label] || '')}"
+          class="cf-input" style="border-color:${esc(brand.borderColor)};background:${esc(brand.bgColor)};color:${esc(brand.textColor)};border-radius:${Math.max(2, btnR - 2)}px"
+          oninput="S.contact['${esc(f.label)}']=this.value" placeholder="${esc(f.label)}">
+      </div>`).join('')}
+    </div>`;
+  }
+
+  if (q.type === 'multiple_choice') {
+    const sel = S.answers[q.id];
+    return `<div class="qcard" style="${cs}">
+      <h2>${mdi(q.title)}</h2>
+      ${q.description ? `<div class="md-content qdesc">${md(q.description)}</div>` : '<div style="height:16px"></div>'}
+      ${(q.options || []).map(opt => `
+        <button class="opt-btn" onclick="selOpt('${q.id}','${opt.id}')"
+          style="border-color:${sel===opt.id ? brand.primaryColor : brand.borderColor};background:${sel===opt.id ? brand.primaryColor+'18' : 'transparent'};color:${sel===opt.id ? brand.primaryColor : brand.textColor};border-radius:${Math.max(0,cardR-4)}px">
+          <div class="opt-c" style="border-color:${sel===opt.id ? brand.primaryColor : brand.borderColor+'88'};background:${sel===opt.id ? brand.primaryColor : 'transparent'}">
+            ${sel===opt.id ? `<div style="width:7px;height:7px;border-radius:50%;background:white"></div>` : ''}
+          </div>${esc(opt.text)}
+        </button>`).join('')}
+    </div>`;
+  }
+
+  if (q.type === 'multi_select') {
+    const sel = Array.isArray(S.answers[q.id]) ? S.answers[q.id] : [];
+    return `<div class="qcard" style="${cs}">
+      <h2>${mdi(q.title)}</h2>
+      <p class="qdesc">Select all that apply</p>
+      ${getOpts(q).map(opt => { const is = sel.includes(opt.id); return `
+        <button class="opt-btn" onclick="togMulti('${q.id}','${opt.id}')"
+          style="border-color:${is ? brand.primaryColor : brand.borderColor};background:${is ? brand.primaryColor+'18' : 'transparent'};color:${is ? brand.primaryColor : brand.textColor};border-radius:${Math.max(0,cardR-4)}px">
+          <div class="opt-ck" style="border-color:${is ? brand.primaryColor : brand.borderColor+'88'};background:${is ? brand.primaryColor : 'transparent'}">
+            ${is ? '<i class="ti ti-check" style="font-size:11px;color:white"></i>' : ''}
+          </div>${esc(opt.text)}
+        </button>`; }).join('')}
+    </div>`;
+  }
+
+  if (q.type === 'ranking') {
+    const opts = getOpts(q);
+    if (!Array.isArray(S.answers[q.id]) || S.answers[q.id].length !== opts.length)
+      S.answers[q.id] = opts.map(o => o.id);
+    const order = S.answers[q.id];
+    const oMap = Object.fromEntries(opts.map(o => [o.id, o]));
+    const n = order.length;
+    return `<div class="qcard" style="${cs}">
+      <h2>${mdi(q.title)}</h2>
+      <p class="qdesc">${esc(q.description) || 'Drag to reorder — most important at the top'}</p>
+      <div class="rank-list">
+        ${order.map((optId, idx) => {
+          const opt = oMap[optId] || { text: optId };
+          return `<div class="rank-item" data-opt="${optId}" data-qid="${q.id}"
+            draggable="true"
+            ondragstart="dSt(event,'${q.id}','${optId}')"
+            ondragover="dOv(event,'${q.id}','${optId}')"
+            ondrop="dDr(event,'${q.id}','${optId}')"
+            ondragend="dEnd()"
+            ondragleave="this.classList.remove('drag-over')"
+            style="border-color:${idx===0 ? brand.primaryColor : brand.borderColor};background:${idx===0 ? brand.primaryColor+'14' : brand.surfaceColor};color:${idx===0 ? brand.primaryColor : brand.textColor}">
+            <div class="rank-num" style="background:${idx===0 ? brand.primaryColor : brand.borderColor};color:${idx===0 ? '#fff' : brand.textColor}">${idx+1}</div>
+            <div class="rank-hdl" style="color:${brand.textColor}">⠇</div>
+            <div class="rank-txt">${esc(opt.text)}</div>
+            <div class="rank-arr">
+              <button class="rarr" onclick="mvRk('${q.id}','${optId}',-1)" ${idx===0?'disabled':''} style="color:${brand.textColor}"><i class="ti ti-chevron-up" style="font-size:13px"></i></button>
+              <button class="rarr" onclick="mvRk('${q.id}','${optId}',1)" ${idx===n-1?'disabled':''} style="color:${brand.textColor}"><i class="ti ti-chevron-down" style="font-size:13px"></i></button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <p style="font-size:11px;opacity:.35;margin-top:12px;text-align:center"><i class="ti ti-arrows-up-down" style="font-size:12px"></i> Drag or use arrows to reorder</p>
+    </div>`;
+  }
+
+  if (q.type === 'text') return `<div class="qcard" style="${cs}">
+    <h2 style="margin-bottom:16px">${mdi(q.title)}</h2>
+    <textarea rows="5" oninput="S.answers['${q.id}']=this.value"
+      style="width:100%;padding:12px;border:1px solid ${esc(brand.borderColor)};border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;background:${esc(brand.bgColor)};color:${esc(brand.textColor)};outline:none">${esc(S.answers[q.id]||'')}</textarea>
+  </div>`;
+
+  return '';
+}
+
+function rResults() {
+  const brand = b(); const scores = S._scores; const ranks = S._ranks;
+  const tiedTop = S._tiedTop || [];const cardR = cr(); const btnR = br();
+  return `
+    <div class="results-wrap" style="background:${esc(brand.bgColor)};font-family:${esc(brand.fontFamily||'system-ui,sans-serif')}">
+      <div class="results-inner">
+        ${brand.logoUrl ? `<div style="text-align:center;margin-bottom:24px"><img src="${esc(brand.logoUrl)}" style="height:34px;object-fit:contain" onerror="this.style.display='none'" alt=""></div>` : ''}
+        <div class="result-hero" style="background:${esc(brand.surfaceColor)};border:1px solid ${esc(brand.borderColor)};border-radius:${cardR}px">
+          ${S._saveError ? `<div style="background:#450a0a;color:#f87171;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:14px;text-align:left"><strong>⚠ Response not saved:</strong> ${esc(S._saveError)}</div>` : ''}
+        <div style="width:52px;height:52px;border-radius:50%;background:${esc(brand.primaryColor)}22;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+            <i class="ti ti-check" style="font-size:26px;color:${esc(brand.primaryColor)}"></i>
+          </div>
+          <h1 style="color:${esc(brand.textColor)}">Your Results Are In</h1>
+          <p style="color:${esc(brand.textColor)}">Your personalized breakdown across each dimension.</p>
+          ${tiedTop.length > 1 ? `<div style="margin-top:12px;padding:5px 16px;background:${esc(brand.primaryColor)}18;border-radius:20px;display:inline-block;font-size:12px;color:${esc(brand.primaryColor)};font-weight:700">Tied results across ${tiedTop.length} dimensions</div>` : ''}
+        </div>
+        ${DIMS.filter(d => { const showIt = d.show_in_results !== false; const isSpectrum = d.name.startsWith('Spectrum — '); return (showIt && !isSpectrum) && !S._hiddenDims.has(d.id); }).map(d => {
+          const score = scores?.[d.id] || 0; const mx = maxScore(d.id);
+          const pct = Math.min(100, Math.round((score / mx) * 100));
+          const rank = ranks?.[d.id]; const isTied = tiedTop.includes(d.id);
+          return `<div class="dim-result" style="border-color:${isTied ? brand.primaryColor : brand.borderColor};${isTied ? 'box-shadow:0 0 0 2px '+brand.primaryColor : ''}">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="width:10px;height:10px;border-radius:50%;background:${esc(d.color||brand.primaryColor)}"></div>
+                <strong style="color:${esc(brand.textColor)}">${mdi(d.name)}</strong>
+                ${isTied ? `<span class="top-badge" style="background:${esc(brand.primaryColor)}">★ Top${tiedTop.length>1?' (Tied)':''}</span>` : ''}
+              </div>
+              ${rank ? `<span style="color:${esc(d.color||brand.primaryColor)};font-size:13px;font-weight:700">${esc(rank.label)}</span>` : ''}
+            </div>
+            <div class="score-bar-wrap" style="background:${esc(brand.borderColor)}"><div class="score-bar-fill" style="width:${pct}%;background:${esc(d.color||brand.primaryColor)}"></div></div>
+            <div class="dim-label" style="color:${esc(brand.textColor)}">${score} pts (${pct}%)</div>
+            ${rank?.description ? `<p class="dim-desc" style="color:${esc(brand.textColor)}">${esc(rank.description)}</p>` : ''}
+            ${rank?.recommendation ? `<div class="dim-rec" style="background:${esc(brand.bgColor)};border-left-color:${esc(d.color||brand.primaryColor)};color:${esc(brand.textColor)}"><strong>Next step:</strong> ${esc(rank.recommendation)}</div>` : ''}
+          </div>`;
+        }).join('')}
+        ${ASM.allow_retakes !== false ? `<div style="text-align:center;margin-top:20px">
+          <button onclick="restart()" style="background:transparent;color:${esc(brand.textColor)};border:1px solid ${esc(brand.borderColor)};padding:11px 22px;border-radius:${btnR}px;font-size:14px;cursor:pointer;font-family:inherit">Retake Assessment</button>
+        </div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INTERACTIONS
+// ═══════════════════════════════════════════════════════════════════
+function selOpt(qId, optId) { S.answers[qId] = optId; render(); }
+function togMulti(qId, optId) {
+  const cur = Array.isArray(S.answers[qId]) ? [...S.answers[qId]] : [];
+  const i = cur.indexOf(optId);
+  if (i >= 0) cur.splice(i, 1); else cur.push(optId);
+  S.answers[qId] = cur; render();
+}
+function mvRk(qId, optId, dir) {
+  const order = [...(S.answers[qId] || [])];
+  const i = order.indexOf(optId);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  S.answers[qId] = order;
+  render();
+}
+
+// ── Drag and drop — robust version ──
+// _drag declared at top of SHUFFLE section
+function dSt(e, qId, optId) {
+  _drag = { qId, optId };
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', optId); // required for Firefox
+  // Use setTimeout so dragging class applies after clone is taken
+  setTimeout(() => {
+    const el = document.querySelector('[data-opt="' + optId + '"]');
+    if (el) el.classList.add('dragging');
+  }, 0);
+}
+function dOv(e, qId, optId) {
+  e.preventDefault();
+  e.stopPropagation();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.rank-item').forEach(el => el.classList.remove('drag-over'));
+  const el = document.querySelector('[data-opt="' + optId + '"]');
+  if (el) el.classList.add('drag-over');
+}
+function dDr(e, qId, targetId) {
+  e.preventDefault();
+  e.stopPropagation();
+  document.querySelectorAll('.rank-item').forEach(el => el.classList.remove('drag-over', 'dragging'));
+  if (!_drag || _drag.optId === targetId || _drag.qId !== qId) { _drag = null; return; }
+  const order = [...(S.answers[qId] || [])];
+  const fi = order.indexOf(_drag.optId);
+  const ti = order.indexOf(targetId);
+  if (fi < 0 || ti < 0) { _drag = null; return; }
+  order.splice(fi, 1);
+  order.splice(ti, 0, _drag.optId);
+  S.answers[qId] = order;
+  _drag = null;
+  render();
+}
+function dEnd() {
+  document.querySelectorAll('.rank-item').forEach(el => el.classList.remove('drag-over', 'dragging'));
+  _drag = null;
+}
+
+function prevStep() { if (S.step > 0) { S.step--; render(); window.scrollTo(0, 0); } }
+function nextStep() {
+  const q = QS_ORDERED[S.step];
+  if (q.required) {
+    if (q.type === 'multiple_choice' && !S.answers[q.id]) { toast('Please select an answer', 'err'); return; }
+    if (q.type === 'multi_select' && (!S.answers[q.id] || !S.answers[q.id].length)) { toast('Please select at least one option', 'err'); return; }
+    if (q.type === 'contact_form') {
+      (q.contact_fields || []).forEach(f => {
+        const el = document.getElementById(`cf_${f.label.replace(/\s+/g,'_')}`);
+        if (el) S.contact[f.label] = el.value;
+      });
+      for (const f of (q.contact_fields || [])) {
+        if (f.required && !S.contact[f.label]) { toast(`Please fill in "${f.label}"`, 'err'); return; }
+      }
+    }
+  } else if (q.type === 'contact_form') {
+    (q.contact_fields || []).forEach(f => {
+      const el = document.getElementById(`cf_${f.label.replace(/\s+/g,'_')}`);
+      if (el) S.contact[f.label] = el.value;
+    });
+  }
+  if (S.step < QS_ORDERED.length - 1) { S.step++; render(); window.scrollTo(0, 0); }
+  else { submitAssessment(); }
+}
+
 async function submitAssessment() {
   const scores    = calcScores(S.answers);
   const ranks     = getRanks(scores);
@@ -442,363 +1035,6 @@ function showError(msg) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BRAND, SHUFFLE, HELPERS
-// ═══════════════════════════════════════════════════════════════════
-const DB = { primaryColor:'#2563eb', bgColor:'#f8fafc', textColor:'#1e293b', surfaceColor:'#ffffff', borderColor:'#e2e8f0', logoUrl:'', fontFamily:'system-ui, sans-serif', btnRadius:'8', cardRadius:'12' };
-const b = () => ({ ...DB, ...(ASM?.brand || {}) });
-const br = () => parseInt(b().btnRadius) || 8;
-const cr = () => parseInt(b().cardRadius) || 12;
-
-function seededShuffle(arr, seed) {
-  const a = [...arr]; let s = seed;
-  for (let i = a.length - 1; i > 0; i--) {
-    s = (s * 1664525 + 1013904223) & 0xffffffff;
-    const j = Math.abs(s) % (i + 1);
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-function getOpts(q) {
-  const opts = q.options || [];
-  if (!q.shuffle_options || !opts.length) return opts;
-  if (!S.shuffledOrders[q.id]) {
-    const seed = q.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) + Date.now() % 9999;
-    S.shuffledOrders[q.id] = seededShuffle(opts.map(o => o.id), seed);
-  }
-  return S.shuffledOrders[q.id].map(id => opts.find(o => o.id === id)).filter(Boolean);
-}
-function visibleDims() { return DIMS.filter(d => d.show_in_results !== false); }
-function maxScore(dimId) {
-  let m = 0;
-  QS_ORDERED.forEach(q => {
-    if (q.type === 'multiple_choice') { const sc = (q.options||[]).map(o=>Number(o.scores?.[dimId]||0)); if(sc.length) m+=Math.max(0,...sc); }
-    if (q.type === 'multi_select') { (q.options||[]).forEach(o=>{const s=Number(o.scores?.[dimId]||0);if(s>0)m+=s;}); }
-    if (q.type === 'ranking') {
-      const opts=q.options||[]; const n=opts.length;
-      const weights=q.position_weights?.length===n?q.position_weights:Array.from({length:n},(_,i)=>n-i);
-      const maxW=n?Math.max(...weights):0;
-      const maxS=Math.max(0,...opts.map(o=>Number(o.scores?.[dimId]||0)));
-      m+=maxS*maxW;
-    }
-  });
-  return m||1;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// RENDER
-// ═══════════════════════════════════════════════════════════════════
-function applyBodyBrand() {
-  const brand = b();
-  document.body.style.background = brand.bgColor;
-  document.body.style.fontFamily = brand.fontFamily;
-  document.body.style.color = brand.textColor;
-  if (!document.getElementById('vs-hover-style')) {
-    const s = document.createElement('style'); s.id='vs-hover-style'; document.head.appendChild(s);
-  }
-  document.getElementById('vs-hover-style').textContent =
-    `.opt-btn:hover{border-color:${brand.primaryColor}!important;background:${brand.primaryColor}14!important;}`;
-}
-
-
-function renderCF(f, brand, getVal, setVal) {
-  var br2 = Math.max(2, parseInt(brand.btnRadius||8) - 2);
-  var bc  = brand.borderColor;
-  var tc  = brand.textColor;
-  var bg  = brand.bgColor;
-  var pc  = brand.primaryColor;
-  var baseStyle = 'width:100%;padding:10px 12px;border:1px solid '+bc+';border-radius:'+br2+'px;font-size:14px;font-family:inherit;color:'+tc+';background:'+bg+';outline:none;box-sizing:border-box';
-  var lbl = '<label style="display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:'+tc+';opacity:.5;margin-bottom:4px">'+esc(f.label)+(f.required?' *':'')+'</label>';
-  var val = getVal(f.label) || '';
-  var opts = (f.options||'').split(',').map(function(o){ return o.trim(); }).filter(Boolean);
-  var id = 'cf-'+f.id;
-  var input = '';
-
-  if (f.type === 'textarea') {
-    var sv = String(setVal(f.label,'this.value'));
-    input = '<textarea id="'+id+'" rows="3" placeholder="'+esc(f.label)+'" style="'+baseStyle+';resize:vertical" oninput="'+sv+'">'+esc(val)+'</textarea>';
-  } else if (f.type === 'date') {
-    input = '<input type="date" id="'+id+'" value="'+esc(val)+'" style="'+baseStyle+'" onchange="S.contact[\''+esc(f.label)+'\']=this.value">';
-  } else if (f.type === 'radio') {
-    input = '<div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">'+opts.map(function(o){
-      return '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:'+tc+'">'
-        +'<input type="radio" name="'+id+'" value="'+esc(o)+'" '+(val===o?'checked':'')+' onchange="S.contact[\''+esc(f.label)+'\']=this.value" style="accent-color:'+pc+'"> '+esc(o)+'</label>';
-    }).join('')+'</div>';
-  } else if (f.type === 'select') {
-    input = '<select id="'+id+'" style="'+baseStyle+'" onchange="S.contact[\''+esc(f.label)+'\']=this.value">'
-      +'<option value="">Select...</option>'
-      +opts.map(function(o){ return '<option value="'+esc(o)+'" '+(val===o?'selected':'')+'>'+esc(o)+'</option>'; }).join('')
-      +'</select>';
-  } else if (f.type === 'multiselect' || f.type === 'checkbox') {
-    var selArr = val ? val.split('||') : [];
-    var wrapStyle = f.type === 'multiselect'
-      ? 'border:1px solid '+bc+';border-radius:'+br2+'px;overflow:hidden'
-      : 'display:flex;flex-direction:column;gap:6px;margin-top:4px';
-    var itemStyle = f.type === 'multiselect'
-      ? 'display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:14px;color:'+tc+';border-bottom:1px solid '+bc
-      : 'display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:'+tc;
-    input = '<div style="'+wrapStyle+'">'+opts.map(function(o){
-      var chk = selArr.indexOf(o) >= 0;
-      return '<label style="'+itemStyle+'">'
-        +'<input type="checkbox" class="cf-multi" data-field="'+esc(f.label)+'" value="'+esc(o)+'" '+(chk?'checked':'')+' onchange="cfMultiChange(this)" style="accent-color:'+pc+'"> '+esc(o)+'</label>';
-    }).join('')+'</div>';
-  } else {
-    input = '<input type="'+esc(f.type||'text')+'" id="'+id+'" value="'+esc(val)+'" placeholder="'+esc(f.label)+'" style="'+baseStyle+'" oninput="S.contact[\''+esc(f.label)+'\']=this.value">';
-  }
-  return '<div style="margin-bottom:14px">'+lbl+input+'</div>';
-}
-
-function cfMultiChange(el) {
-  var fieldLabel = el.getAttribute('data-field');
-  var all = document.querySelectorAll('.cf-multi[data-field="'+fieldLabel+'"]:checked');
-  var vals = Array.from(all).map(function(cb){ return cb.value; });
-  S.contact[fieldLabel] = vals.join('||');
-}
-
-function render() {
-  const root = document.getElementById('root');
-  if (!root) return;
-  if (S.submitted) { root.innerHTML = rResults(); }
-  else { root.innerHTML = rTake(); }
-  applyBodyBrand();
-  requestAnimationFrame(() => { notifyResize(); });
-}
-
-function rTake() {
-  const brand=b(); const q=QS_ORDERED[S.step]; const total=QS_ORDERED.length;
-  const pct=Math.round((S.step/total)*100);
-  return `<div class="take-wrap" style="background:${esc(brand.bgColor)};color:${esc(brand.textColor)}">
-    <div class="take-bar" style="background:${esc(brand.surfaceColor)};border-bottom-color:${esc(brand.borderColor)}">
-      <div class="take-bar-inner">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          ${brand.logoUrl?`<img src="${esc(brand.logoUrl)}" class="take-logo" onerror="this.style.display='none'" alt="">`:`<div class="take-logo-text" style="color:${esc(brand.primaryColor)}">${esc(ASM.title)}</div>`}
-          <span class="take-meta" style="color:${esc(brand.textColor)}">${S.step+1} / ${total}</span>
-        </div>
-        <div class="take-prog-wrap" style="background:${esc(brand.borderColor)}">
-          <div class="take-prog-fill" style="width:${pct}%;background:${esc(brand.primaryColor)}"></div>
-        </div>
-      </div>
-    </div>
-    <div class="take-body">${rQ(q,brand)}</div>
-    <div class="take-nav" style="background:${esc(brand.surfaceColor)};border-top:1px solid ${esc(brand.borderColor)}">
-      <div class="take-nav-inner">
-        <button class="tg" onclick="prevStep()" ${S.step===0?'disabled':''} style="color:${esc(brand.textColor)}">
-          <i class="ti ti-arrow-left"></i> Back
-        </button>
-        <div class="pdots">${QS_ORDERED.map((_,i)=>`<div class="pdot" style="background:${i===S.step?brand.primaryColor:i<S.step?brand.primaryColor+'44':brand.borderColor}"></div>`).join('')}</div>
-        <button class="tp" onclick="nextStep()" style="background:${esc(brand.primaryColor)};border-radius:${br()}px">
-          ${S.step===total-1?'<i class="ti ti-check"></i> Submit':'Next <i class="ti ti-arrow-right"></i>'}
-        </button>
-      </div>
-    </div>
-  </div>`;
-}
-
-function rQ(q, brand) {
-  const cardR=cr(); const btnR=br();
-  const cs=`background:${esc(brand.surfaceColor)};border:1px solid ${esc(brand.borderColor)};border-radius:${cardR}px;color:${esc(brand.textColor)}`;
-
-  if (q.type==='instruction') return `<div class="qcard" style="${cs}">
-    <h2 style="font-size:22px;font-weight:700;margin-bottom:14px">${mdi(q.title)}</h2>
-    ${q.description?`<div class="md-content" style="font-size:15px;line-height:1.75">${md(q.description)}</div>`:''}
-  </div>`;
-
-  if (q.type==='contact_form') {
-    const fields=q.contact_fields||[];
-    return `<div class="qcard" style="${cs}">
-      <h2 style="font-size:19px;font-weight:700;margin-bottom:16px">${mdi(q.title)}</h2>
-      ${fields.map(f=>`<div style="margin-bottom:14px">
-        <label class="cf-label" style="color:${esc(brand.textColor)}">${esc(f.label)}${f.required?' *':''}</label>
-        <input type="${esc(f.type||'text')}" id="cf_${esc(f.label.replace(/\s+/g,'_'))}"
-          value="${esc(S.contact[f.label]||'')}"
-          class="cf-input" style="border-color:${esc(brand.borderColor)};background:${esc(brand.bgColor)};color:${esc(brand.textColor)};border-radius:${Math.max(2,btnR-2)}px"
-          oninput="S.contact['${esc(f.label)}']=this.value" placeholder="${esc(f.label)}">
-      </div>`).join('')}
-    </div>`;
-  }
-
-  if (q.type==='multiple_choice') {
-    const sel=S.answers[q.id];
-    return `<div class="qcard" style="${cs}">
-      <h2>${mdi(q.title)}</h2>
-      ${q.description?`<div class="md-content qdesc">${md(q.description)}</div>`:'<div style="height:16px"></div>'}
-      ${(q.options||[]).map(opt=>`
-        <button class="opt-btn" onclick="selOpt('${q.id}','${opt.id}')"
-          style="border-color:${sel===opt.id?brand.primaryColor:brand.borderColor};background:${sel===opt.id?brand.primaryColor+'18':'transparent'};color:${sel===opt.id?brand.primaryColor:brand.textColor};border-radius:${Math.max(0,cardR-4)}px">
-          <div class="opt-c" style="border-color:${sel===opt.id?brand.primaryColor:brand.borderColor+'88'};background:${sel===opt.id?brand.primaryColor:'transparent'}">
-            ${sel===opt.id?`<div style="width:7px;height:7px;border-radius:50%;background:white"></div>`:''}
-          </div>${mdi(opt.text)}
-        </button>`).join('')}
-    </div>`;
-  }
-
-  if (q.type==='multi_select') {
-    const sel=Array.isArray(S.answers[q.id])?S.answers[q.id]:[];
-    return `<div class="qcard" style="${cs}">
-      <h2>${mdi(q.title)}</h2>
-      <p class="qdesc">Select all that apply</p>
-      ${getOpts(q).map(opt=>{const is=sel.includes(opt.id);return `
-        <button class="opt-btn" onclick="togMulti('${q.id}','${opt.id}')"
-          style="border-color:${is?brand.primaryColor:brand.borderColor};background:${is?brand.primaryColor+'18':'transparent'};color:${is?brand.primaryColor:brand.textColor};border-radius:${Math.max(0,cardR-4)}px">
-          <div class="opt-ck" style="border-color:${is?brand.primaryColor:brand.borderColor+'88'};background:${is?brand.primaryColor:'transparent'}">
-            ${is?'<i class="ti ti-check" style="font-size:11px;color:white"></i>':''}
-          </div>${mdi(opt.text)}
-        </button>`;}).join('')}
-    </div>`;
-  }
-
-  if (q.type==='ranking') {
-    const opts=getOpts(q);
-    if (!Array.isArray(S.answers[q.id])||S.answers[q.id].length!==opts.length) S.answers[q.id]=opts.map(o=>o.id);
-    const order=S.answers[q.id]; const oMap=Object.fromEntries(opts.map(o=>[o.id,o])); const n=order.length;
-    return `<div class="qcard" style="${cs}">
-      <h2>${mdi(q.title)}</h2>
-      <p class="qdesc">${q.description?mdi(q.description):'Drag to reorder — most important at the top'}</p>
-      <div class="rank-list">
-        ${order.map((optId,idx)=>{const opt=oMap[optId]||{text:optId};return `
-          <div class="rank-item" data-opt="${optId}" data-qid="${q.id}"
-            draggable="true"
-            ondragstart="dSt(event,'${q.id}','${optId}')"
-            ondragover="dOv(event,'${q.id}','${optId}')"
-            ondrop="dDr(event,'${q.id}','${optId}')"
-            ondragend="dEnd()"
-            ondragleave="this.classList.remove('drag-over')"
-            style="border-color:${idx===0?brand.primaryColor:brand.borderColor};background:${idx===0?brand.primaryColor+'14':brand.surfaceColor};color:${idx===0?brand.primaryColor:brand.textColor}">
-            <div class="rank-num" style="background:${idx===0?brand.primaryColor:brand.borderColor};color:${idx===0?'#fff':brand.textColor}">${idx+1}</div>
-            <div class="rank-hdl" style="color:${brand.textColor}">⠇</div>
-            <div class="rank-txt">${mdi(opt.text)}</div>
-            <div class="rank-arr">
-              <button class="rarr" onclick="mvRk('${q.id}','${optId}',-1)" ${idx===0?'disabled':''} style="color:${brand.textColor}"><i class="ti ti-chevron-up" style="font-size:13px"></i></button>
-              <button class="rarr" onclick="mvRk('${q.id}','${optId}',1)" ${idx===n-1?'disabled':''} style="color:${brand.textColor}"><i class="ti ti-chevron-down" style="font-size:13px"></i></button>
-            </div>
-          </div>`;}).join('')}
-      </div>
-      <p style="font-size:11px;opacity:.35;margin-top:12px;text-align:center"><i class="ti ti-arrows-up-down" style="font-size:12px"></i> Drag or use arrows to reorder</p>
-    </div>`;
-  }
-
-  if (q.type==='text') return `<div class="qcard" style="${cs}">
-    <h2 style="margin-bottom:16px">${mdi(q.title)}</h2>
-    <textarea rows="5" oninput="S.answers['${q.id}']=this.value"
-      style="width:100%;padding:12px;border:1px solid ${esc(brand.borderColor)};border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;background:${esc(brand.bgColor)};color:${esc(brand.textColor)};outline:none">${esc(S.answers[q.id]||'')}</textarea>
-  </div>`;
-
-  return '';
-}
-
-function rResults() {
-  const brand=b(); const scores=S._scores; const ranks=S._ranks;
-  const tiedTop=S._tiedTop||[]; const cardR=cr(); const btnR=br();
-  return `<div class="results-wrap" style="background:${esc(brand.bgColor)};font-family:${esc(brand.fontFamily||'system-ui,sans-serif')}">
-    <div class="results-inner">
-      ${brand.logoUrl?`<div style="text-align:center;margin-bottom:24px"><img src="${esc(brand.logoUrl)}" style="height:34px;object-fit:contain" onerror="this.style.display='none'" alt=""></div>`:''}
-      <div class="result-hero" style="background:${esc(brand.surfaceColor)};border:1px solid ${esc(brand.borderColor)};border-radius:${cardR}px">
-        ${S._saveError?`<div style="background:#450a0a;color:#f87171;padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:14px"><strong>⚠ Response not saved:</strong> ${esc(S._saveError)}</div>`:''}
-        <div style="width:52px;height:52px;border-radius:50%;background:${esc(brand.primaryColor)}22;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
-          <i class="ti ti-check" style="font-size:26px;color:${esc(brand.primaryColor)}"></i>
-        </div>
-        <h1 style="color:${esc(brand.textColor)}">Your Results Are In</h1>
-        <p style="color:${esc(brand.textColor)}">Your personalized breakdown across each dimension.</p>
-        ${tiedTop.length>1?`<div style="margin-top:12px;padding:5px 16px;background:${esc(brand.primaryColor)}18;border-radius:20px;display:inline-block;font-size:12px;color:${esc(brand.primaryColor)};font-weight:700">Tied results across ${tiedTop.length} dimensions</div>`:''}
-      </div>
-      ${DIMS.filter(d=>{const show=d.show_in_results!==false;const isSpec=d.name.startsWith('Spectrum — ');return show&&!isSpec&&!S._hiddenDims.has(d.id);}).map(d=>{
-        const score=scores?.[d.id]||0; const mx=maxScore(d.id);
-        const pct=Math.min(100,Math.round((score/mx)*100));
-        const rank=ranks?.[d.id]; const isTied=tiedTop.includes(d.id);
-        return `<div class="dim-result" style="border-color:${isTied?brand.primaryColor:brand.borderColor};${isTied?'box-shadow:0 0 0 2px '+brand.primaryColor:''}">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-            <div style="display:flex;align-items:center;gap:8px">
-              <div style="width:10px;height:10px;border-radius:50%;background:${esc(d.color||brand.primaryColor)}"></div>
-              <strong style="color:${esc(brand.textColor)}">${mdi(d.name)}</strong>
-              ${isTied?`<span class="top-badge" style="background:${esc(brand.primaryColor)}">★ Top${tiedTop.length>1?' (Tied)':''}</span>`:''}
-            </div>
-            ${rank?`<span style="color:${esc(d.color||brand.primaryColor)};font-size:13px;font-weight:700">${esc(rank.label)}</span>`:''}
-          </div>
-          <div class="score-bar-wrap" style="background:${esc(brand.borderColor)}"><div class="score-bar-fill" style="width:${pct}%;background:${esc(d.color||brand.primaryColor)}"></div></div>
-          <div class="dim-label" style="color:${esc(brand.textColor)}">${score} pts (${pct}%)</div>
-          ${rank?.description?`<p class="dim-desc" style="color:${esc(brand.textColor)}">${md(rank.description)}</p>`:''}
-          ${rank?.recommendation?`<div class="dim-rec" style="background:${esc(brand.bgColor)};border-left-color:${esc(d.color||brand.primaryColor)};color:${esc(brand.textColor)}"><strong>Next step:</strong> ${md(rank.recommendation)}</div>`:''}
-        </div>`;}).join('')}
-      ${ASM.allow_retakes!==false?`<div style="text-align:center;margin-top:20px">
-        <button onclick="restart()" style="background:transparent;color:${esc(brand.textColor)};border:1px solid ${esc(brand.borderColor)};padding:11px 22px;border-radius:${btnR}px;font-size:14px;cursor:pointer;font-family:inherit">Retake Assessment</button>
-      </div>`:''}
-    </div>
-  </div>`;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// INTERACTIONS
-// ═══════════════════════════════════════════════════════════════════
-const S = { step:0, answers:{}, contact:{..._urlContact}, submitted:false, shuffledOrders:{}, _hiddenDims:new Set() };
-let _drag = null;
-
-function selOpt(qId,optId){S.answers[qId]=optId;render();}
-function togMulti(qId,optId){
-  const cur=Array.isArray(S.answers[qId])?[...S.answers[qId]]:[];
-  const i=cur.indexOf(optId);if(i>=0)cur.splice(i,1);else cur.push(optId);
-  S.answers[qId]=cur;render();
-}
-function mvRk(qId,optId,dir){
-  const order=[...(S.answers[qId]||[])];const i=order.indexOf(optId);const j=i+dir;
-  if(i<0||j<0||j>=order.length)return;[order[i],order[j]]=[order[j],order[i]];S.answers[qId]=order;render();
-}
-function dSt(e,qId,optId){
-  _drag={qId,optId};e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',optId);
-  setTimeout(()=>{const el=document.querySelector('[data-opt="'+optId+'"]');if(el)el.classList.add('dragging');},0);
-}
-function dOv(e,qId,optId){
-  e.preventDefault();e.stopPropagation();e.dataTransfer.dropEffect='move';
-  document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over'));
-  const el=document.querySelector('[data-opt="'+optId+'"]');if(el)el.classList.add('drag-over');
-}
-function dDr(e,qId,targetId){
-  e.preventDefault();e.stopPropagation();
-  document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over','dragging'));
-  if(!_drag||_drag.optId===targetId||_drag.qId!==qId){_drag=null;return;}
-  const order=[...(S.answers[qId]||[])];const fi=order.indexOf(_drag.optId);const ti=order.indexOf(targetId);
-  if(fi<0||ti<0){_drag=null;return;}
-  order.splice(fi,1);order.splice(ti,0,_drag.optId);S.answers[qId]=order;_drag=null;render();
-}
-function dEnd(){document.querySelectorAll('.rank-item').forEach(el=>el.classList.remove('drag-over','dragging'));_drag=null;}
-function prevStep(){if(S.step>0){S.step--;render();window.scrollTo(0,0);}}
-function nextStep(){
-  const q=QS_ORDERED[S.step];
-  if(q.required){
-    if(q.type==='multiple_choice'&&!S.answers[q.id]){toast('Please select an answer','err');return;}
-    if(q.type==='multi_select'&&(!S.answers[q.id]||!S.answers[q.id].length)){toast('Please select at least one option','err');return;}
-    if(q.type==='contact_form'){
-      (q.contact_fields||[]).forEach(f=>{
-        const id='cf-'+f.id;
-        if(f.type==='textarea'||f.type==='date'||f.type==='select'||f.type==='email'||f.type==='tel'||f.type==='text'||!f.type){
-          const el=document.getElementById(id);if(el)S.contact[f.label]=el.value;
-        } else if(f.type==='radio'){
-          const el=document.querySelector('input[name="'+id+'"]:checked');if(el)S.contact[f.label]=el.value;
-        }
-        // checkbox/multiselect handled by cfMultiChange already
-      });
-      for(const f of(q.contact_fields||[])){if(f.required&&!S.contact[f.label]){toast('Please fill in "'+f.label+'"','err');return;}}
-    }
-  } else if(q.type==='contact_form'){
-    (q.contact_fields||[]).forEach(f=>{
-        const id='cf-'+f.id;
-        if(f.type==='textarea'||f.type==='date'||f.type==='select'||f.type==='email'||f.type==='tel'||f.type==='text'||!f.type){
-          const el=document.getElementById(id);if(el)S.contact[f.label]=el.value;
-        } else if(f.type==='radio'){
-          const el=document.querySelector('input[name="'+id+'"]:checked');if(el)S.contact[f.label]=el.value;
-        }
-        // checkbox/multiselect handled by cfMultiChange already
-      });
-  }
-  if(S.step<QS_ORDERED.length-1){S.step++;render();window.scrollTo(0,0);}
-  else{submitAssessment();}
-}
-
-// Pre-populate contact from URL params
-const _urlContact={};
-if(URL_EMAIL)_urlContact['Email']=URL_EMAIL;
-if(URL_NAME){_urlContact['First Name']=URL_NAME.split(' ')[0];_urlContact['Last Name']=URL_NAME.split(' ').slice(1).join(' ');}
-if(URL_USERID)_urlContact['User ID']=URL_USERID;
-
-// ═══════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════
 if (!CFG.supabaseUrl || !CFG.supabaseKey) {
@@ -823,7 +1059,6 @@ if (IS_EMBED) {
   // Also fire once on load
   window.addEventListener('load', function() { setTimeout(notifyResize, 200); });
 }
-
 
 </script>
 </body>
