@@ -968,12 +968,18 @@ async function submitAssessment() {
   S._saveError = saveError;
   S._savedId = savedId;
   render();
-  notifyComplete();
 
-  // Fire webhook async (don't block results display)
-  if (ASM.webhook_url && savedId) {
-    fireWebhook(ASM, { ...response, id: savedId });
+  // Fire webhook BEFORE notifying the parent. notifyComplete() posts
+  // vs:complete (with redirect) to the embedding page, which may close the
+  // modal or navigate away and tear down this iframe. Dispatching the webhook
+  // first — with keepalive — ensures the request survives that teardown.
+  // Gate on webhook_url only: a successful insert can still return no row when
+  // RLS SELECT scoping blocks the representation, leaving savedId undefined.
+  if (ASM.webhook_url) {
+    fireWebhook(ASM, { ...response, id: savedId || null });
   }
+
+  notifyComplete();
 }
 
 async function fireWebhook(asm, resp) {
@@ -992,7 +998,7 @@ async function fireWebhook(asm, resp) {
   try {
     const headers = { 'Content-Type': 'application/json' };
     try { if (asm.webhook_headers) Object.assign(headers, JSON.parse(asm.webhook_headers)); } catch {}
-    const res = await fetch(asm.webhook_url, { method: 'POST', headers, body: JSON.stringify(payload) });
+    const res = await fetch(asm.webhook_url, { method: 'POST', headers, body: JSON.stringify(payload), keepalive: true });
     if (!res.ok) console.warn('Webhook returned', res.status);
     // Update webhook status in Supabase
     if (resp.id) {
@@ -1003,7 +1009,7 @@ async function fireWebhook(asm, resp) {
     // If CORS error, try no-cors fallback (fire-and-forget, no response body)
     if (e.message && (e.message.includes('fetch') || e.message.includes('CORS') || e.message.includes('network'))) {
       try {
-        await fetch(asm.webhook_url, { method: 'POST', mode: 'no-cors', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        await fetch(asm.webhook_url, { method: 'POST', mode: 'no-cors', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload), keepalive: true });
         console.log('Webhook sent via no-cors fallback');
         if (resp.id) sbUpdate('ab_responses', `id=eq.${resp.id}`, { webhook_status: 'sent' }).catch(() => {});
       } catch (e2) { console.error('Webhook no-cors also failed:', e2.message); }
