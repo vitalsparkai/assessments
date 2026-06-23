@@ -969,14 +969,21 @@ async function submitAssessment() {
   S._savedId = savedId;
   render();
 
-  // Fire webhook BEFORE notifying the parent. notifyComplete() posts
-  // vs:complete (with redirect) to the embedding page, which may close the
-  // modal or navigate away and tear down this iframe. Dispatching the webhook
-  // first — with keepalive — ensures the request survives that teardown.
+  // Fire the webhook and AWAIT delivery while the iframe is still alive, THEN
+  // notify the parent. notifyComplete() posts vs:complete (with redirect) to the
+  // embedding WordPress page, which closes the modal / navigates away and removes
+  // this iframe. A request dispatched from an iframe that is then removed from the
+  // DOM is NOT reliably completed — keepalive only guarantees survival across a
+  // top-level page unload, not iframe removal — so Chrome cancels it in flight and
+  // n8n never sees it. Sending before the parent teardown is what makes it land.
+  // Capped so a slow/unreachable n8n can't block the completion handoff.
   // Gate on webhook_url only: a successful insert can still return no row when
   // RLS SELECT scoping blocks the representation, leaving savedId undefined.
   if (ASM.webhook_url) {
-    fireWebhook(ASM, { ...response, id: savedId || null });
+    await Promise.race([
+      fireWebhook(ASM, { ...response, id: savedId || null }),
+      new Promise(res => setTimeout(res, 4000)),
+    ]).catch(() => {});
   }
 
   notifyComplete();
