@@ -141,6 +141,7 @@ const REDIRECT  = QPS.get('redirect') || '';
 const URL_EMAIL  = QPS.get('email')  || '';
 const URL_NAME   = QPS.get('name')   || '';
 const URL_USERID = QPS.get('userid') || '';
+const URL_TEAM   = QPS.get('team')   || '';   // team code passed from the suite page
 
 // ═══════════════════════════════════════════════════════════════════
 // SUPABASE REST HELPERS
@@ -937,11 +938,12 @@ async function submitAssessment() {
   if (URL_EMAIL)  contactData['Email'] = URL_EMAIL;
   if (URL_NAME && !contactData['First Name'])   { contactData['First Name'] = URL_NAME.split(' ')[0]; contactData['Last Name'] = URL_NAME.split(' ').slice(1).join(' '); }
   if (URL_USERID) contactData['userId'] = URL_USERID;
+  if (URL_TEAM && !contactData['Team Code (Optional):']) contactData['Team Code (Optional):'] = URL_TEAM;
 
   const response = {
     assessment_id:  ASM.id,
     tenant_id:      ASM.tenant_id || null,
-    team_code:      S.contact['Team Code (Optional):'] || null,
+    team_code:      S.contact['Team Code (Optional):'] || URL_TEAM || null,
     contact:        contactData,
     answers:        { ...S.answers },
     scores:         Object.fromEntries(DIMS.map(d => [d.name, scores[d.id] || 0])),

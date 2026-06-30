@@ -393,12 +393,16 @@ async function loadAll(){
     responses:   {},
     projects:    [],
     folders:     [],
+    suites:      [],
   };
   // Projects/folders — optional, fail silently
   db.projects = await sbGet('ab_projects',`owner_id=eq.${_userId||_session?.user?.id}&instance_id=eq.${iid}&order=created_at`).catch(()=>[]);
   db.folders  = await sbGet('ab_folders', `owner_id=eq.${_userId||_session?.user?.id}&instance_id=eq.${iid}&order=order_index`).catch(()=>[]);
   if (!Array.isArray(db.projects)) db.projects = [];
   if (!Array.isArray(db.folders))  db.folders  = [];
+  // White-label suites — optional, fail silently
+  db.suites = await sbGet('ab_suites', `tenant_id=eq.${_tenantId}&order=created_at.desc`).catch(()=>[]);
+  if (!Array.isArray(db.suites)) db.suites = [];
   // Restore locally-stored projects/folders (they live in localStorage, not Supabase)
   loadLocal();
   // Per-assessment data — each wrapped individually so one bad assessment can't crash all
@@ -628,7 +632,7 @@ async function fireWH(asm,resp,dims){
 }
 
 /* ══ STATE ══ */
-const S={view:'home',asmId:null,tab:'gen',answers:{},contact:{},step:0,preview:false,doneResp:null,modal:null,expandedSecs:{},shuffledOrders:{},selMode:false,sel:[],whitelabel:null};
+const S={view:'home',asmId:null,tab:'gen',answers:{},contact:{},step:0,preview:false,doneResp:null,modal:null,expandedSecs:{},shuffledOrders:{},selMode:false,sel:[],whitelabel:null,suiteEdit:null,suiteSel:[],suiteFolderFilter:''};
 let _drag=null;
 
 function dSt(e,qId,optId){
@@ -1125,6 +1129,161 @@ document.addEventListener('drop', function(e){
   document.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
 });
 
+// ═══════════════════════════════════════════════════
+// WHITE-LABEL SUITES  (multi-tenant /s/{slug} tracker pages)
+// ═══════════════════════════════════════════════════
+function goToSuites(){ S.view='suites'; S.suiteEdit=null; render(); }
+function slugify(s){ return String(s||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
+function suiteLink(slug){ return location.origin + '/s/' + slug; }
+
+function suitesNew(folderId){
+  const pool = folderId ? db.assessments.filter(a=>a.folder_id===folderId) : [];
+  const b = gb(pool[0]||db.assessments[0]||{});
+  S.suiteSel = pool.map(a=>a.id);
+  S.suiteFolderFilter = folderId || '';
+  S.suiteEdit = {
+    id:null, _slugTouched:false,
+    slug:'', name: folderId ? ((db.folders.find(f=>f.id===folderId)?.name||'')+' Suite').trim() : '',
+    intro:'', logo_url:b.logoUrl||'', primary_color:b.primaryColor||'#2563eb', accent_color:'#16a34a',
+    webhook_url:'', webhook_headers:'{"Content-Type":"application/json"}', redirect_url:'',
+  };
+  if(S.suiteEdit.name){ S.suiteEdit.slug=slugify(S.suiteEdit.name); }
+  render();
+}
+function suitesEdit(id){
+  const s=(db.suites||[]).find(x=>x.id===id); if(!s) return;
+  S.suiteEdit={ id:s.id, _slugTouched:true, slug:s.slug||'', name:s.name||'', intro:s.intro||'', logo_url:s.logo_url||'',
+    primary_color:s.primary_color||'#2563eb', accent_color:s.accent_color||'#16a34a',
+    webhook_url:s.webhook_url||'', redirect_url:s.redirect_url||'',
+    webhook_headers: typeof s.webhook_headers==='string'?s.webhook_headers:JSON.stringify(s.webhook_headers||{'Content-Type':'application/json'}) };
+  S.suiteSel=Array.isArray(s.assessment_ids)?[...s.assessment_ids]:[];
+  S.suiteFolderFilter=''; render();
+}
+function suitesCancel(){ S.suiteEdit=null; render(); }
+function suiteField(k,v){ if(S.suiteEdit) S.suiteEdit[k]=v; }
+function suiteUpdLink(){ const el=document.getElementById('su-linkprev'); if(el&&S.suiteEdit) el.textContent=S.suiteEdit.slug?suiteLink(S.suiteEdit.slug):''; }
+function suiteOnName(v){ suiteField('name',v); const sl=document.getElementById('su-slug'); if(sl&&!S.suiteEdit._slugTouched){ const s=slugify(v); sl.value=s; suiteField('slug',s); suiteUpdLink(); } }
+function suiteOnSlug(v){ S.suiteEdit._slugTouched=true; const s=slugify(v); const sl=document.getElementById('su-slug'); if(sl) sl.value=s; suiteField('slug',s); suiteUpdLink(); }
+function suiteToggleAsm(id){ const i=S.suiteSel.indexOf(id); if(i>=0) S.suiteSel.splice(i,1); else S.suiteSel.push(id); render(); }
+function suiteAddFolder(fid){ if(!fid) return; db.assessments.filter(a=>a.folder_id===fid).forEach(a=>{ if(!S.suiteSel.includes(a.id)) S.suiteSel.push(a.id); }); render(); }
+function suiteMove(id,dir){ const i=S.suiteSel.indexOf(id); if(i<0) return; const j=i+dir; if(j<0||j>=S.suiteSel.length) return; const t=S.suiteSel[i]; S.suiteSel[i]=S.suiteSel[j]; S.suiteSel[j]=t; render(); }
+function copyText(t){ (navigator.clipboard?.writeText(t)||Promise.reject()).then(()=>toast('Link copied ✓')).catch(()=>toast('Copy failed','err')); }
+
+async function saveSuite(){
+  const e=S.suiteEdit; if(!e) return;
+  e.name=document.getElementById('su-name')?.value.trim()||e.name;
+  e.slug=slugify(document.getElementById('su-slug')?.value||e.slug);
+  e.intro=document.getElementById('su-intro')?.value||'';
+  e.logo_url=document.getElementById('su-logo')?.value.trim()||'';
+  e.primary_color=document.getElementById('su-pc')?.value||e.primary_color;
+  e.accent_color=document.getElementById('su-ac')?.value||e.accent_color;
+  e.webhook_url=document.getElementById('su-wh')?.value.trim()||'';
+  e.webhook_headers=document.getElementById('su-whh')?.value.trim()||'{"Content-Type":"application/json"}';
+  e.redirect_url=document.getElementById('su-rd')?.value.trim()||'';
+  if(!e.name){ toast('Enter a suite name','err'); return; }
+  if(!e.slug){ toast('Enter a URL slug','err'); return; }
+  if(!S.suiteSel.length){ toast('Select at least one assessment','err'); return; }
+  if((db.suites||[]).some(s=>s.slug===e.slug && s.id!==e.id)){ toast('That slug is already used — pick another','err'); return; }
+  let headers; try{ headers=JSON.parse(e.webhook_headers); }catch{ toast('Webhook headers must be valid JSON','err'); return; }
+  const row={ id:e.id||uid(), slug:e.slug, name:e.name, intro:e.intro, logo_url:e.logo_url,
+    primary_color:e.primary_color, accent_color:e.accent_color, webhook_url:e.webhook_url,
+    webhook_headers:headers, redirect_url:e.redirect_url, assessment_ids:[...S.suiteSel],
+    folder_id:S.suiteFolderFilter||null, instance_id:getInstanceId(), owner_id:_userId, tenant_id:_tenantId };
+  try{ await sbUpsertReturn('ab_suites',row); }
+  catch(err){ toast('Save failed: '+err.message,'err'); return; }
+  const idx=(db.suites||[]).findIndex(s=>s.id===row.id);
+  if(idx>=0) db.suites[idx]=row; else { db.suites=db.suites||[]; db.suites.unshift(row); }
+  S.suiteEdit=null; render();
+  toast('Suite saved ✓ — '+suiteLink(row.slug));
+}
+async function delSuite(id){
+  if(!confirm('Delete this suite? Its link will stop working.')) return;
+  try{ await sbDelete('ab_suites',`id=eq.${id}`); }catch(err){ toast('Delete failed: '+err.message,'err'); return; }
+  db.suites=(db.suites||[]).filter(s=>s.id!==id); render(); toast('Suite deleted');
+}
+
+function rSuites(){
+  if(S.suiteEdit) return rSuiteEditor();
+  const suites=db.suites||[];
+  return `<div class="content">
+    <div class="ph">
+      <div><h1>Suites</h1><p class="ph-sub">White-label progress pages — one shareable link per client that fires a webhook when all assessments are complete</p></div>
+      <button class="btn bp" onclick="suitesNew()"><i class="ti ti-plus"></i> New Suite</button>
+    </div>
+    ${suites.length?`<div class="agrid">${suites.map(s=>{const cnt=(s.assessment_ids||[]).length;return `<div class="acard" style="border-top:3px solid ${esc(s.primary_color||'#2563eb')}">
+        ${s.logo_url?`<img src="${esc(s.logo_url)}" style="height:24px;object-fit:contain;margin-bottom:10px" onerror="this.style.display='none'" alt="">`:''}
+        <div style="font-size:15px;font-weight:600;margin-bottom:4px">${esc(s.name)}</div>
+        <div style="font-size:12px;color:#64748b;margin-bottom:6px"><i class="ti ti-link"></i> /s/${esc(s.slug)} · ${cnt} assessment${cnt!==1?'s':''}</div>
+        <div style="font-size:12px;color:#64748b;margin-bottom:12px">${s.webhook_url?`<i class="ti ti-webhook"></i> webhook set`:`<span style="color:#cbd5e1">no webhook</span>`}</div>
+        <div class="acard-actions fx g2">
+          <button class="btn bsm" onclick="suitesEdit('${s.id}')"><i class="ti ti-pencil"></i> Edit</button>
+          <button class="btn bsm" onclick="copyText('${esc(suiteLink(s.slug))}')"><i class="ti ti-copy"></i> Copy link</button>
+          <a class="btn bsm" href="${esc(suiteLink(s.slug))}" target="_blank" rel="noopener" style="margin-left:auto" title="Open"><i class="ti ti-external-link"></i></a>
+          <button class="btn bsm" style="color:#ef4444" onclick="delSuite('${s.id}')" title="Delete"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>`;}).join('')}</div>`
+    :`<div class="empty-state"><i class="ti ti-stack-2" style="font-size:48px;color:#334155;margin-bottom:12px"></i><p style="color:#64748b">No suites yet. Create one to give a client a single link to all their assessments.</p><button class="btn bp" style="margin-top:14px" onclick="suitesNew()"><i class="ti ti-plus"></i> New Suite</button></div>`}
+  </div>`;
+}
+
+function rSuiteEditor(){
+  const e=S.suiteEdit;
+  const folders=db.folders.filter(f=>!S.projectId||f.project_id===S.projectId);
+  const avail=db.assessments.filter(a=>!S.suiteFolderFilter||a.folder_id===S.suiteFolderFilter);
+  const selectedAsms=S.suiteSel.map(id=>db.assessments.find(a=>a.id===id)).filter(Boolean);
+  const link=e.slug?suiteLink(e.slug):'';
+  return `<div class="content">
+    <div class="ph">
+      <div class="fx ic g3"><button class="btn bg bic" onclick="suitesCancel()"><i class="ti ti-arrow-left"></i></button>
+        <div><h1>${e.id?'Edit Suite':'New Suite'}</h1><p class="ph-sub"><i class="ti ti-link"></i> <span id="su-linkprev">${esc(link)||'set a slug to get a link'}</span></p></div>
+      </div>
+      <div class="fx g2"><button class="btn bs" onclick="suitesCancel()">Cancel</button><button class="btn bp" onclick="saveSuite()"><i class="ti ti-device-floppy"></i> Save Suite</button></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start">
+      <div class="card">
+        <div class="ctit"><i class="ti ti-settings"></i> Suite settings</div>
+        <div class="fg"><label>Client / suite name</label><input id="su-name" type="text" value="${esc(e.name)}" placeholder="Acme Corp" oninput="suiteOnName(this.value)"></div>
+        <div class="fg"><label>URL slug</label><input id="su-slug" type="text" value="${esc(e.slug)}" placeholder="acme" oninput="suiteOnSlug(this.value)"></div>
+        <div class="fg"><label>Intro text</label><textarea id="su-intro" rows="2" placeholder="Shown under the title" oninput="suiteField('intro',this.value)">${esc(e.intro)}</textarea></div>
+        <div class="fg"><label>Logo URL</label><input id="su-logo" type="url" value="${esc(e.logo_url)}" placeholder="https://…/logo.png" oninput="suiteField('logo_url',this.value)"></div>
+        <div style="display:flex;gap:14px">
+          <div class="fg" style="flex:1"><label>Primary color</label><input id="su-pc" type="color" value="${esc(e.primary_color)}" oninput="suiteField('primary_color',this.value)"></div>
+          <div class="fg" style="flex:1"><label>Accent (done)</label><input id="su-ac" type="color" value="${esc(e.accent_color)}" oninput="suiteField('accent_color',this.value)"></div>
+        </div>
+        <div class="fg"><label>Webhook URL <span style="text-transform:none;letter-spacing:0;color:#94a3b8;font-weight:500">— fires once when all complete</span></label><input id="su-wh" type="url" value="${esc(e.webhook_url)}" placeholder="https://…/webhook" oninput="suiteField('webhook_url',this.value)"></div>
+        <div class="fg"><label>Webhook headers (JSON)</label><textarea id="su-whh" rows="2" oninput="suiteField('webhook_headers',this.value)">${esc(e.webhook_headers)}</textarea></div>
+        <div class="fg"><label>Redirect URL (optional)</label><input id="su-rd" type="url" value="${esc(e.redirect_url)}" placeholder="Where to send them after finishing" oninput="suiteField('redirect_url',this.value)"></div>
+      </div>
+      <div class="card">
+        <div class="ctit"><i class="ti ti-list-check"></i> Assessments in this suite (${S.suiteSel.length})</div>
+        ${selectedAsms.length?`<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+          ${selectedAsms.map((a,i)=>`<div style="display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 9px">
+            <span style="width:20px;height:20px;border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</span>
+            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.title)}</span>
+            <button class="btn bsm" onclick="suiteMove('${a.id}',-1)" ${i===0?'disabled':''} title="Move up"><i class="ti ti-chevron-up"></i></button>
+            <button class="btn bsm" onclick="suiteMove('${a.id}',1)" ${i===selectedAsms.length-1?'disabled':''} title="Move down"><i class="ti ti-chevron-down"></i></button>
+            <button class="btn bsm" style="color:#ef4444" onclick="suiteToggleAsm('${a.id}')" title="Remove"><i class="ti ti-x"></i></button>
+          </div>`).join('')}
+        </div>`:'<div style="font-size:13px;color:#64748b;margin-bottom:16px">Nothing selected yet — pick from the list below.</div>'}
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+          <select id="su-folder-filter" onchange="S.suiteFolderFilter=this.value;render()" style="flex:1">
+            <option value="">All assessments</option>
+            ${folders.map(f=>`<option value="${f.id}" ${S.suiteFolderFilter===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}
+          </select>
+          ${S.suiteFolderFilter?`<button class="btn bsm" onclick="suiteAddFolder('${S.suiteFolderFilter}')"><i class="ti ti-plus"></i> Add all</button>`:''}
+        </div>
+        <div style="max-height:330px;overflow-y:auto;display:flex;flex-direction:column;gap:5px">
+          ${avail.length?avail.map(a=>{const on=S.suiteSel.includes(a.id);const fn=db.folders.find(f=>f.id===a.folder_id)?.name||'';return `<label style="display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid ${on?'var(--primary)':'var(--border)'};border-radius:8px;cursor:pointer;background:${on?'#eff6ff':'var(--surface)'}">
+            <input type="checkbox" ${on?'checked':''} onchange="suiteToggleAsm('${a.id}')" style="width:16px;height:16px;accent-color:var(--primary);flex-shrink:0">
+            <span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.title)}</span>
+            ${fn?`<span style="font-size:10px;color:#94a3b8;flex-shrink:0"><i class="ti ti-folder" style="font-size:10px"></i> ${esc(fn)}</span>`:''}
+          </label>`;}).join(''):'<div style="font-size:13px;color:#64748b;padding:8px">No assessments match this filter.</div>'}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function render(){
   const app=document.getElementById('app');
   if(S.view==='take'){app.innerHTML=rTake();return;}
@@ -1133,6 +1292,7 @@ function render(){
     <div class="sidebar-logo"><i class="ti ti-chart-bar-popular"></i> AssessBuilder</div>
     <nav class="sidebar-nav">
       <div class="si ${S.view==='home'?'on':''}" onclick="goTo('home')"><i class="ti ti-layout-grid"></i> Assessments</div>
+      <div class="si ${S.view==='suites'?'on':''}" onclick="goToSuites()"><i class="ti ti-stack-2"></i> Suites</div>
       ${S.asmId?`<div class="si ${S.view==='ed'?'on':''}" onclick="goTo('ed')"><i class="ti ti-pencil"></i> Editor</div><div class="si ${S.view==='res'?'on':''}" onclick="goTo('res')"><i class="ti ti-users"></i> Results</div>`:''}
     </nav>
     <!-- Projects panel -->
@@ -1170,7 +1330,7 @@ function render(){
         <button onclick="signOut()" style="background:transparent;border:1px solid #334155;color:#94a3b8;padding:3px 9px;border-radius:5px;font-size:11px;cursor:pointer;font-family:inherit" title="Sign out">Sign out</button>
       </div>
     </div>
-  </aside><main class="main">${S.view==='home'?rHome():S.view==='ed'?rEd():S.view==='res'?rRes():''}</main></div>${rMod()}`;
+  </aside><main class="main">${S.view==='home'?rHome():S.view==='suites'?rSuites():S.view==='ed'?rEd():S.view==='res'?rRes():''}</main></div>${rMod()}`;
   bindCP();
 }
 

@@ -57,96 +57,73 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .done-banner p{font-size:14px;color:var(--mut);margin-top:6px;line-height:1.5}
 @keyframes pop{0%{transform:scale(0)}100%{transform:scale(1)}}
 
-/* Gate (email capture) */
-.gate{background:var(--surf);border:1px solid var(--bd);border-radius:16px;padding:28px 26px;max-width:440px;margin:0 auto}
+/* Gate (identity capture) */
+.gate{background:var(--surf);border:1px solid var(--bd);border-radius:16px;padding:28px 26px;max-width:460px;margin:0 auto}
 .gate h2{font-size:17px;font-weight:700;margin-bottom:6px}
-.gate p{font-size:13px;color:var(--mut);margin-bottom:18px;line-height:1.5}
-.gate label{display:block;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin-bottom:5px;margin-top:12px}
+.gate p{font-size:13px;color:var(--mut);margin-bottom:14px;line-height:1.5}
+.gate label{display:block;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin-bottom:5px;margin-top:14px}
+.gate label .opt{text-transform:none;letter-spacing:0;font-weight:500;color:#94a3b8}
 .gate input{width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:9px;font-size:14px;font-family:inherit;color:var(--tx);background:#fff;outline:none}
 .gate input:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-.gate .btn-p{width:100%;justify-content:center;margin-top:20px;padding:11px}
+.gate .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.gate .row2 label{margin-top:0}
+.gate .btn-p{width:100%;justify-content:center;margin-top:22px;padding:11px}
 .gate .err{color:#dc2626;font-size:12.5px;margin-top:8px;display:none}
 
 /* States */
 .center{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:14px;color:var(--mut);text-align:center;padding:30px}
+.center h2{font-size:18px;font-weight:700;color:var(--tx)}
 .spinner{width:34px;height:34px;border:3px solid #e2e8f0;border-top-color:var(--p);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .center i{font-size:44px;color:#cbd5e1}
 .poweredby{text-align:center;font-size:11px;color:#94a3b8;margin-top:30px}
-.toast-wrap{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99}
-.toast{background:#1e293b;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.2);display:flex;align-items:center;gap:8px}
 </style>
 </head>
 <body>
 <div id="app"><div class="center"><div class="spinner"></div><div>Loading…</div></div></div>
-<div class="toast-wrap" id="toast"></div>
 
 <!-- Optional: instance id injected by nginx (harmless 404 if served elsewhere) -->
 <script src="/config.js" onerror="void 0"></script>
 <script>
-/* ═══════════════════════════════════════════════════════════════════
-   SUITE CONFIG  ── edit this block per white-label client
-   ═══════════════════════════════════════════════════════════════════ */
-const SUITE = {
-  id:        'default-suite',                       // unique id (storage + webhook key)
-  name:      'Your Assessment Journey',
-  intro:     'Complete all five assessments below. Your progress is saved automatically — finish them in any order, and we’ll let you know when you’re done.',
-  logoUrl:   '',                                     // e.g. 'https://acme.com/logo.png'
-  primaryColor: '#2563eb',
-  accentColor:  '#16a34a',                           // colour for completed items
-  requireEmail: true,                                // ask for email before starting (needed to track completion)
-  webhookUrl:    '',                                 // fires ONCE when all are complete
-  webhookHeaders:{ 'Content-Type': 'application/json' },
-  redirectUrl:   '',                                 // optional: send the user here after the suite completes
-  // The five assessments (any number works; titles/descriptions are shown on the cards)
-  assessments: [
-    { id: 'PASTE_ASSESSMENT_ID_1', title: 'Assessment One',   description: 'Short description of what this covers.' },
-    { id: 'PASTE_ASSESSMENT_ID_2', title: 'Assessment Two',   description: 'Short description of what this covers.' },
-    { id: 'PASTE_ASSESSMENT_ID_3', title: 'Assessment Three', description: 'Short description of what this covers.' },
-    { id: 'PASTE_ASSESSMENT_ID_4', title: 'Assessment Four',  description: 'Short description of what this covers.' },
-    { id: 'PASTE_ASSESSMENT_ID_5', title: 'Assessment Five',  description: 'Short description of what this covers.' },
-  ],
-};
-
 /* ═══════════════════════════════════════════════════════════════════
    INFRASTRUCTURE CONFIG  ── matches player.html / your Supabase project
    ═══════════════════════════════════════════════════════════════════ */
 const CFG = {
   supabaseUrl:  'https://owouiukkteoentgpbrlk.supabase.co',
   supabaseKey:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93b3VpdWtrdGVvZW50Z3BicmxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjQxNzcsImV4cCI6MjA5NTM0MDE3N30.NOPj0iARb1bExfBv2t8KvFktLTisp2OPE95dM_C7TJw',
-  playerOrigin: 'https://assessments.vitalspark.ai',  // where /a/{id} is served from
+  playerOrigin: 'https://assessments.vitalspark.ai',   // where /a/{id} is served from
 };
 
 /* ═══════════════════════════════════════════════════════════════════
-   RUNTIME
+   RUNTIME — one file serves every client; the URL slug picks the suite.
+     /s/acme   /suite/acme   /s?c=acme
+   Each suite (brand, webhook, assessments) lives in the ab_suites table.
    ═══════════════════════════════════════════════════════════════════ */
-const QPS   = new URLSearchParams(location.search);
-const STORE = 'vs_suite__' + SUITE.id;
-const esc   = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-const enc   = encodeURIComponent;
+const QPS  = new URLSearchParams(location.search);
+const esc  = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const enc  = encodeURIComponent;
 
-// Allow quick overrides via URL (handy for testing / per-link personalisation)
-if (QPS.get('webhook')) SUITE.webhookUrl = QPS.get('webhook');
+function parseSlug() {
+  const m = location.pathname.match(/^\/s(?:uite)?\/([^/?#]+)/i);
+  if (m) return decodeURIComponent(m[1]);
+  return QPS.get('c') || QPS.get('suite') || '';
+}
+const SLUG  = parseSlug();
+const STORE = 'vs_suite__' + SLUG;
+
+let SUITE  = null;   // row from ab_suites
+let ASSESS = [];     // [{id, title, description}] in suite order
 
 const ST = {
-  email:  (QPS.get('email') || '').trim().toLowerCase(),
-  name:   (QPS.get('name')  || '').trim(),
-  status: {},          // { [assessmentId]: { done:bool, responseId, completedAt } }
+  firstName: (QPS.get('first') || '').trim(),
+  lastName:  (QPS.get('last')  || '').trim(),
+  email:     (QPS.get('email') || '').trim().toLowerCase(),
+  teamCode:  (QPS.get('team')  || '').trim(),
+  status: {},   // { [assessmentId]: { done, responseId, completedAt } }
   loaded: false,
-  busy:   false,
+  busy: false,
 };
-
-// Restore saved identity
-try {
-  const saved = JSON.parse(localStorage.getItem(STORE + '__id') || '{}');
-  if (!ST.email && saved.email) ST.email = saved.email;
-  if (!ST.name  && saved.name)  ST.name  = saved.name;
-} catch {}
-
-// Apply brand
-document.documentElement.style.setProperty('--p',  SUITE.primaryColor || '#2563eb');
-document.documentElement.style.setProperty('--ac', SUITE.accentColor  || '#16a34a');
-document.title = SUITE.name || 'Assessment Suite';
+const fullName = () => [ST.firstName, ST.lastName].filter(Boolean).join(' ').trim();
 
 /* ── Supabase ── */
 async function sbGet(table, params) {
@@ -157,7 +134,7 @@ async function sbGet(table, params) {
   return r.json();
 }
 
-// Has this email submitted a response to this assessment?
+// Completion = a response row for this assessment with this email
 async function isComplete(assessmentId, email) {
   const params = `select=id,created_at&assessment_id=eq.${enc(assessmentId)}&contact->>Email=eq.${enc(email)}&order=created_at.asc&limit=1`;
   const rows = await sbGet('ab_responses', params).catch(() => []);
@@ -165,11 +142,10 @@ async function isComplete(assessmentId, email) {
 }
 
 async function refreshStatus(opts = {}) {
-  if (!ST.email || ST.busy) return;
+  if (!ST.email || ST.busy || !ASSESS.length) return;
   ST.busy = true;
   if (opts.spinner) render();
-  const valid = SUITE.assessments.filter(a => a.id && !/^PASTE_/.test(a.id));
-  await Promise.all(valid.map(async a => {
+  await Promise.all(ASSESS.map(async a => {
     try {
       const hit = await isComplete(a.id, ST.email);
       ST.status[a.id] = hit ? { done: true, ...hit } : { done: false };
@@ -182,34 +158,38 @@ async function refreshStatus(opts = {}) {
 }
 
 /* ── Webhook (fires once when every assessment is complete) ── */
-function allDone() {
-  const valid = SUITE.assessments.filter(a => a.id && !/^PASTE_/.test(a.id));
-  return valid.length > 0 && valid.every(a => ST.status[a.id]?.done);
-}
+function allDone() { return ASSESS.length > 0 && ASSESS.every(a => ST.status[a.id]?.done); }
 function firedKey() { return STORE + '__fired__' + ST.email; }
 
 async function maybeFireWebhook() {
-  if (!allDone()) return;
-  if (localStorage.getItem(firedKey())) { if (SUITE.redirectUrl) maybeRedirect(); return; }
+  if (!allDone() || !SUITE) return;
+  if (localStorage.getItem(firedKey())) { maybeRedirect(); return; }
   localStorage.setItem(firedKey(), new Date().toISOString());   // guard against double-fire
-  if (SUITE.webhookUrl) {
+  if (SUITE.webhook_url) {
     const payload = {
       event:      'suite_completed',
-      suiteId:    SUITE.id,
+      suiteSlug:  SUITE.slug,
       suiteName:  SUITE.name,
       instanceId: (typeof window !== 'undefined' && window.VS_INSTANCE_ID) || null,
-      contact:    { email: ST.email, name: ST.name },
+      contact: {
+        firstName: ST.firstName, lastName: ST.lastName,
+        name:      fullName(),   email: ST.email,
+        teamCode:  ST.teamCode || null,
+      },
       completedAt: new Date().toISOString(),
-      assessments: SUITE.assessments
-        .filter(a => a.id && !/^PASTE_/.test(a.id))
-        .map(a => ({ id: a.id, title: a.title, responseId: ST.status[a.id]?.responseId || null, completedAt: ST.status[a.id]?.completedAt || null })),
+      assessments: ASSESS.map(a => ({
+        id: a.id, title: a.title,
+        responseId: ST.status[a.id]?.responseId || null,
+        completedAt: ST.status[a.id]?.completedAt || null,
+      })),
     };
+    let headers = { 'Content-Type': 'application/json' };
+    try { if (SUITE.webhook_headers) headers = { ...headers, ...(typeof SUITE.webhook_headers === 'string' ? JSON.parse(SUITE.webhook_headers) : SUITE.webhook_headers) }; } catch {}
     try {
-      const res = await fetch(SUITE.webhookUrl, { method: 'POST', headers: SUITE.webhookHeaders || { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true });
+      const res = await fetch(SUITE.webhook_url, { method: 'POST', headers, body: JSON.stringify(payload), keepalive: true });
       if (!res.ok) console.warn('Suite webhook returned', res.status);
     } catch (e) {
-      // CORS fallback — fire-and-forget
-      try { await fetch(SUITE.webhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true }); }
+      try { await fetch(SUITE.webhook_url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true }); }
       catch (e2) { console.error('Suite webhook failed:', e2.message); localStorage.removeItem(firedKey()); }
     }
   }
@@ -217,77 +197,105 @@ async function maybeFireWebhook() {
   maybeRedirect();
 }
 function maybeRedirect() {
-  if (SUITE.redirectUrl) setTimeout(() => { try { (window.top || window).location.href = SUITE.redirectUrl; } catch { location.href = SUITE.redirectUrl; } }, 1800);
+  if (SUITE && SUITE.redirect_url) setTimeout(() => { try { (window.top || window).location.href = SUITE.redirect_url; } catch { location.href = SUITE.redirect_url; } }, 1800);
 }
 
-/* ── Identity gate ── */
+/* ── Identity ── */
+function restoreIdentity() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE + '__id') || '{}');
+    if (!ST.firstName && s.firstName) ST.firstName = s.firstName;
+    if (!ST.lastName  && s.lastName)  ST.lastName  = s.lastName;
+    if (!ST.email     && s.email)     ST.email     = s.email;
+    if (!ST.teamCode  && s.teamCode)  ST.teamCode  = s.teamCode;
+  } catch {}
+}
 function startSuite() {
+  const fn = (document.getElementById('g-first')?.value || '').trim();
+  const ln = (document.getElementById('g-last')?.value  || '').trim();
   const em = (document.getElementById('g-email')?.value || '').trim().toLowerCase();
-  const nm = (document.getElementById('g-name')?.value || '').trim();
+  const tc = (document.getElementById('g-team')?.value  || '').trim();
   const err = document.getElementById('g-err');
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { if (err) { err.textContent = 'Please enter a valid email address.'; err.style.display = 'block'; } return; }
-  ST.email = em; ST.name = nm;
-  try { localStorage.setItem(STORE + '__id', JSON.stringify({ email: em, name: nm })); } catch {}
+  const fail = (msg) => { if (err) { err.textContent = msg; err.style.display = 'block'; } };
+  if (!fn) return fail('Please enter your first name.');
+  if (!ln) return fail('Please enter your last name.');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return fail('Please enter a valid email address.');
+  ST.firstName = fn; ST.lastName = ln; ST.email = em; ST.teamCode = tc;
+  try { localStorage.setItem(STORE + '__id', JSON.stringify({ firstName: fn, lastName: ln, email: em, teamCode: tc })); } catch {}
   render();
   refreshStatus({ spinner: true });
 }
 function switchUser() {
-  ST.email = ''; ST.name = ''; ST.status = {}; ST.loaded = false;
+  ST.firstName = ST.lastName = ST.email = ST.teamCode = '';
+  ST.status = {}; ST.loaded = false;
   try { localStorage.removeItem(STORE + '__id'); } catch {}
   render();
 }
 
-/* ── Links ── */
+/* ── Links — pass identity so each assessment records the same person ── */
 function playerLink(id) {
   const p = new URLSearchParams();
-  if (ST.email) p.set('email', ST.email);
-  if (ST.name)  p.set('name',  ST.name);
+  if (ST.email)    p.set('email', ST.email);
+  if (fullName())  p.set('name',  fullName());
+  if (ST.teamCode) p.set('team',  ST.teamCode);
   return `${CFG.playerOrigin}/a/${id}?${p.toString()}`;
 }
 
-/* ── Render ── */
-function render() {
-  const app = document.getElementById('app');
-  const valid = SUITE.assessments.filter(a => a.id && !/^PASTE_/.test(a.id));
+/* ── Brand ── */
+function applyBrand() {
+  document.documentElement.style.setProperty('--p',  SUITE.primary_color || '#2563eb');
+  document.documentElement.style.setProperty('--ac', SUITE.accent_color  || '#16a34a');
+  document.title = SUITE.name || 'Assessment Suite';
+}
 
-  // Header (shared)
+/* ── Render ── */
+function renderMessage(title, body, icon = 'ti-help-circle') {
+  document.getElementById('app').innerHTML =
+    `<div class="wrap"><div class="center"><i class="ti ${icon}"></i><h2>${esc(title)}</h2><div>${esc(body)}</div></div></div>`;
+}
+
+function render() {
+  if (!SUITE) return;
+  const app = document.getElementById('app');
   const header = `<div class="head">
-    ${SUITE.logoUrl ? `<img src="${esc(SUITE.logoUrl)}" alt="" onerror="this.style.display='none'">` : ''}
+    ${SUITE.logo_url ? `<img src="${esc(SUITE.logo_url)}" alt="" onerror="this.style.display='none'">` : ''}
     <h1>${esc(SUITE.name)}</h1>
     ${SUITE.intro ? `<p>${esc(SUITE.intro)}</p>` : ''}
   </div>`;
 
-  // Not configured yet
-  if (!valid.length) {
-    app.innerHTML = `<div class="wrap">${header}<div class="center"><i class="ti ti-settings-exclamation"></i><div>No assessments configured yet.<br>Add your assessment IDs in the <b>SUITE.assessments</b> config block.</div></div></div>`;
-    postHeight(); return;
+  if (!ASSESS.length) {
+    app.innerHTML = `<div class="wrap">${header}<div class="center"><i class="ti ti-clipboard-off"></i><div>No assessments are attached to this suite yet.</div></div></div>`;
+    return;
   }
 
-  // Email gate
-  if (SUITE.requireEmail && !ST.email) {
+  // Identity gate
+  if (!ST.email) {
     app.innerHTML = `<div class="wrap">${header}
       <div class="gate">
         <h2>Let’s get started</h2>
-        <p>Enter your details so we can save your progress across all ${valid.length} assessments.</p>
-        <label for="g-name">Name</label>
-        <input id="g-name" type="text" placeholder="Your name" value="${esc(ST.name)}" autocomplete="name">
+        <p>Enter your details so we can save your progress across all ${ASSESS.length} assessments.</p>
+        <div class="row2">
+          <div><label for="g-first">First name</label><input id="g-first" type="text" value="${esc(ST.firstName)}" autocomplete="given-name" onkeydown="if(event.key==='Enter')document.getElementById('g-last').focus()"></div>
+          <div><label for="g-last">Last name</label><input id="g-last" type="text" value="${esc(ST.lastName)}" autocomplete="family-name" onkeydown="if(event.key==='Enter')document.getElementById('g-email').focus()"></div>
+        </div>
         <label for="g-email">Email</label>
-        <input id="g-email" type="email" placeholder="you@company.com" value="${esc(ST.email)}" autocomplete="email" onkeydown="if(event.key==='Enter')startSuite()">
+        <input id="g-email" type="email" placeholder="you@company.com" value="${esc(ST.email)}" autocomplete="email" onkeydown="if(event.key==='Enter')document.getElementById('g-team').focus()">
+        <label for="g-team">Team code <span class="opt">(optional)</span></label>
+        <input id="g-team" type="text" value="${esc(ST.teamCode)}" autocomplete="off" onkeydown="if(event.key==='Enter')startSuite()">
         <div class="err" id="g-err"></div>
         <button class="btn btn-p" onclick="startSuite()"><i class="ti ti-arrow-right"></i> Begin</button>
       </div>
       ${powered()}
     </div>`;
-    postHeight(); return;
+    return;
   }
 
-  const doneCount = valid.filter(a => ST.status[a.id]?.done).length;
-  const pct = Math.round((doneCount / valid.length) * 100);
+  const doneCount = ASSESS.filter(a => ST.status[a.id]?.done).length;
+  const pct = Math.round((doneCount / ASSESS.length) * 100);
   const finished = allDone();
 
-  const items = valid.map((a, i) => {
-    const st = ST.status[a.id] || {};
-    const done = !!st.done;
+  const items = ASSESS.map((a, i) => {
+    const done = !!ST.status[a.id]?.done;
     return `<div class="item ${done ? 'done' : ''}">
       <div class="mark">${done ? '<i class="ti ti-check"></i>' : (i + 1)}</div>
       <div class="item-body">
@@ -307,21 +315,15 @@ function render() {
     ${finished ? `<div class="done-banner">
       <div class="ring"><i class="ti ti-check"></i></div>
       <h2>All assessments complete 🎉</h2>
-      <p>Thanks${ST.name ? ', ' + esc(ST.name.split(' ')[0]) : ''}! You’ve finished all ${valid.length}. ${SUITE.webhookUrl ? 'Your results are on their way.' : ''}</p>
+      <p>Thanks${ST.firstName ? ', ' + esc(ST.firstName) : ''}! You’ve finished all ${ASSESS.length}. ${SUITE.webhook_url ? 'Your results are on their way.' : ''}</p>
     </div>` : ''}
-
     <div class="prog">
-      <div class="prog-top">
-        <span class="prog-lbl">Progress</span>
-        <span class="prog-cnt">${doneCount} of ${valid.length} complete</span>
-      </div>
+      <div class="prog-top"><span class="prog-lbl">Progress</span><span class="prog-cnt">${doneCount} of ${ASSESS.length} complete</span></div>
       <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
     </div>
-
     <div class="list">${items}</div>
-
     <div class="foot">
-      <span class="who">Tracking as <b>${esc(ST.email)}</b></span>
+      <span class="who">Tracking as <b>${esc(fullName() || ST.email)}</b>${ST.teamCode ? ` · team <b>${esc(ST.teamCode)}</b>` : ''}</span>
       <span style="display:flex;gap:14px;align-items:center">
         <button class="link-btn" onclick="refreshStatus({spinner:false})" ${ST.busy ? 'disabled' : ''}><i class="ti ti-refresh"></i> Refresh status</button>
         <button class="link-btn" onclick="switchUser()"><i class="ti ti-user-cog"></i> Not you?</button>
@@ -329,36 +331,36 @@ function render() {
     </div>
     ${powered()}
   </div>`;
-  postHeight();
 }
-
 function powered() { return `<div class="poweredby">Powered by VitalSpark</div>`; }
 
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.innerHTML = `<div class="toast"><i class="ti ti-info-circle"></i> ${esc(msg)}</div>`;
-  setTimeout(() => { t.innerHTML = ''; }, 2600);
-}
-
-/* ── Embed support: tell a host iframe how tall we are ── */
-function postHeight() {
+/* ── Boot ── */
+async function boot() {
+  if (!SLUG) { renderMessage('No suite specified', 'Add a suite to the URL, e.g. /s/your-client.', 'ti-link-off'); return; }
   try {
-    const h = document.body.scrollHeight;
-    parent.postMessage({ type: 'vs:resize', assessmentId: 'suite:' + SUITE.id, height: h }, '*');
-  } catch {}
+    const rows = await sbGet('ab_suites', `select=*&slug=eq.${enc(SLUG.toLowerCase())}&limit=1`);
+    if (!rows.length) { renderMessage('Suite not found', `No suite matches “${SLUG}”.`, 'ti-search-off'); return; }
+    SUITE = rows[0];
+    applyBrand();
+    const ids = Array.isArray(SUITE.assessment_ids) ? SUITE.assessment_ids : [];
+    if (ids.length) {
+      const fetched = await sbGet('ab_assessments', `select=id,title,description&id=in.(${ids.map(enc).join(',')})`);
+      const byId = Object.fromEntries(fetched.map(a => [a.id, a]));
+      ASSESS = ids.map(id => byId[id]).filter(Boolean);   // preserve suite order
+    }
+    restoreIdentity();
+    render();
+    if (ST.email) refreshStatus({ spinner: true });
+  } catch (e) {
+    renderMessage('Could not load suite', e.message || String(e), 'ti-alert-triangle');
+  }
 }
+boot();
 
-/* ── Boot + auto-refresh when the user returns from an assessment ── */
-render();
-if (ST.email) refreshStatus({ spinner: true });
-
-// Re-check completion whenever the page regains focus (user finished in another tab)
-window.addEventListener('focus', () => { if (ST.email && !allDone()) refreshStatus(); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && ST.email && !allDone()) refreshStatus(); });
-// Gentle poll while the suite is open and incomplete
-setInterval(() => { if (!document.hidden && ST.email && !allDone()) refreshStatus(); }, 15000);
-window.addEventListener('load', postHeight);
-window.addEventListener('resize', postHeight);
+/* Re-check completion when the user returns from finishing an assessment */
+window.addEventListener('focus', () => { if (SUITE && ST.email && !allDone()) refreshStatus(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && SUITE && ST.email && !allDone()) refreshStatus(); });
+setInterval(() => { if (!document.hidden && SUITE && ST.email && !allDone()) refreshStatus(); }, 15000);
 </script>
 </body>
 </html>
