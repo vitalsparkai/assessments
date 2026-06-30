@@ -3,6 +3,7 @@ FROM nginx:alpine
 # Copy static files — identical image for every deployment
 COPY assessment-builder.html /usr/share/nginx/html/assessment-builder.html
 COPY player.html             /usr/share/nginx/html/player.html
+COPY suite.html              /usr/share/nginx/html/suite.html
 COPY embed.js                /usr/share/nginx/html/embed.js
 
 # nginx:alpine automatically runs envsubst on *.template files at startup

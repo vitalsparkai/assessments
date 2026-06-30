@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assessment Suite</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.30.0/dist/tabler-icons.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--p:#2563eb;--ac:#16a34a;--bg:#f8fafc;--surf:#ffffff;--bd:#e8edf3;--tx:#1e293b;--mut:#64748b}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;-webkit-font-smoothing:antialiased}
+.wrap{max-width:640px;margin:0 auto;padding:36px 20px 56px}
+
+/* Header */
+.head{text-align:center;margin-bottom:24px}
+.head img{max-height:48px;max-width:200px;object-fit:contain;margin-bottom:14px}
+.head h1{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.2}
+.head p{font-size:14px;color:var(--mut);margin-top:8px;line-height:1.55;max-width:480px;margin-left:auto;margin-right:auto}
+
+/* Progress */
+.prog{margin:22px 0 18px}
+.prog-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.prog-lbl{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.prog-cnt{font-size:13px;font-weight:700;color:var(--p)}
+.prog-track{height:8px;background:#e8edf3;border-radius:99px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--p),var(--ac));border-radius:99px;width:0;transition:width .5s cubic-bezier(.4,0,.2,1)}
+
+/* List */
+.list{display:flex;flex-direction:column;gap:12px}
+.item{display:flex;align-items:center;gap:14px;background:var(--surf);border:1px solid var(--bd);border-radius:14px;padding:16px 18px;transition:border-color .15s,box-shadow .15s,transform .1s}
+.item.done{border-color:#bbf7d0;background:#f6fdf9}
+.item:not(.done):hover{border-color:var(--p);box-shadow:0 4px 16px rgba(37,99,235,.08)}
+.mark{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:2px solid #cbd5e1;color:#94a3b8;background:#fff;transition:all .2s}
+.item.done .mark{background:var(--ac);border-color:var(--ac);color:#fff}
+.item-body{flex:1;min-width:0}
+.item-title{font-size:15px;font-weight:650;line-height:1.3}
+.item-desc{font-size:12.5px;color:var(--mut);margin-top:3px;line-height:1.45}
+.item-act{flex-shrink:0}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;text-decoration:none;white-space:nowrap;transition:opacity .12s,background .12s}
+.btn:disabled{opacity:.5;cursor:default}
+.btn-p{background:var(--p);color:#fff}.btn-p:hover{opacity:.88}
+.btn-s{background:#fff;color:var(--tx);border-color:var(--bd)}.btn-s:hover{background:var(--bg)}
+.done-tag{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:700;color:var(--ac)}
+
+/* Footer / actions */
+.foot{margin-top:22px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.foot .who{font-size:12.5px;color:var(--mut)}
+.foot .who b{color:var(--tx)}
+.link-btn{background:none;border:none;color:var(--p);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+.link-btn:hover{text-decoration:underline}
+
+/* Complete banner */
+.done-banner{text-align:center;background:linear-gradient(135deg,#ecfdf5,#eff6ff);border:1px solid #bbf7d0;border-radius:16px;padding:30px 24px;margin-bottom:22px}
+.done-banner .ring{width:58px;height:58px;border-radius:50%;background:var(--ac);color:#fff;font-size:30px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;animation:pop .4s cubic-bezier(.2,1.4,.4,1)}
+.done-banner h2{font-size:20px;font-weight:800}
+.done-banner p{font-size:14px;color:var(--mut);margin-top:6px;line-height:1.5}
+@keyframes pop{0%{transform:scale(0)}100%{transform:scale(1)}}
+
+/* Gate (email capture) */
+.gate{background:var(--surf);border:1px solid var(--bd);border-radius:16px;padding:28px 26px;max-width:440px;margin:0 auto}
+.gate h2{font-size:17px;font-weight:700;margin-bottom:6px}
+.gate p{font-size:13px;color:var(--mut);margin-bottom:18px;line-height:1.5}
+.gate label{display:block;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);margin-bottom:5px;margin-top:12px}
+.gate input{width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:9px;font-size:14px;font-family:inherit;color:var(--tx);background:#fff;outline:none}
+.gate input:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.gate .btn-p{width:100%;justify-content:center;margin-top:20px;padding:11px}
+.gate .err{color:#dc2626;font-size:12.5px;margin-top:8px;display:none}
+
+/* States */
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:14px;color:var(--mut);text-align:center;padding:30px}
+.spinner{width:34px;height:34px;border:3px solid #e2e8f0;border-top-color:var(--p);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.center i{font-size:44px;color:#cbd5e1}
+.poweredby{text-align:center;font-size:11px;color:#94a3b8;margin-top:30px}
+.toast-wrap{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99}
+.toast{background:#1e293b;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.2);display:flex;align-items:center;gap:8px}
+</style>
+</head>
+<body>
+<div id="app"><div class="center"><div class="spinner"></div><div>Loading…</div></div></div>
+<div class="toast-wrap" id="toast"></div>
+
+<!-- Optional: instance id injected by nginx (harmless 404 if served elsewhere) -->
+<script src="/config.js" onerror="void 0"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   SUITE CONFIG  ── edit this block per white-label client
+   ═══════════════════════════════════════════════════════════════════ */
+const SUITE = {
+  id:        'default-suite',                       // unique id (storage + webhook key)
+  name:      'Your Assessment Journey',
+  intro:     'Complete all five assessments below. Your progress is saved automatically — finish them in any order, and we’ll let you know when you’re done.',
+  logoUrl:   '',                                     // e.g. 'https://acme.com/logo.png'
+  primaryColor: '#2563eb',
+  accentColor:  '#16a34a',                           // colour for completed items
+  requireEmail: true,                                // ask for email before starting (needed to track completion)
+  webhookUrl:    '',                                 // fires ONCE when all are complete
+  webhookHeaders:{ 'Content-Type': 'application/json' },
+  redirectUrl:   '',                                 // optional: send the user here after the suite completes
+  // The five assessments (any number works; titles/descriptions are shown on the cards)
+  assessments: [
+    { id: 'PASTE_ASSESSMENT_ID_1', title: 'Assessment One',   description: 'Short description of what this covers.' },
+    { id: 'PASTE_ASSESSMENT_ID_2', title: 'Assessment Two',   description: 'Short description of what this covers.' },
+    { id: 'PASTE_ASSESSMENT_ID_3', title: 'Assessment Three', description: 'Short description of what this covers.' },
+    { id: 'PASTE_ASSESSMENT_ID_4', title: 'Assessment Four',  description: 'Short description of what this covers.' },
+    { id: 'PASTE_ASSESSMENT_ID_5', title: 'Assessment Five',  description: 'Short description of what this covers.' },
+  ],
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   INFRASTRUCTURE CONFIG  ── matches player.html / your Supabase project
+   ═══════════════════════════════════════════════════════════════════ */
+const CFG = {
+  supabaseUrl:  'https://owouiukkteoentgpbrlk.supabase.co',
+  supabaseKey:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93b3VpdWtrdGVvZW50Z3BicmxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjQxNzcsImV4cCI6MjA5NTM0MDE3N30.NOPj0iARb1bExfBv2t8KvFktLTisp2OPE95dM_C7TJw',
+  playerOrigin: 'https://assessments.vitalspark.ai',  // where /a/{id} is served from
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   RUNTIME
+   ═══════════════════════════════════════════════════════════════════ */
+const QPS   = new URLSearchParams(location.search);
+const STORE = 'vs_suite__' + SUITE.id;
+const esc   = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const enc   = encodeURIComponent;
+
+// Allow quick overrides via URL (handy for testing / per-link personalisation)
+if (QPS.get('webhook')) SUITE.webhookUrl = QPS.get('webhook');
+
+const ST = {
+  email:  (QPS.get('email') || '').trim().toLowerCase(),
+  name:   (QPS.get('name')  || '').trim(),
+  status: {},          // { [assessmentId]: { done:bool, responseId, completedAt } }
+  loaded: false,
+  busy:   false,
+};
+
+// Restore saved identity
+try {
+  const saved = JSON.parse(localStorage.getItem(STORE + '__id') || '{}');
+  if (!ST.email && saved.email) ST.email = saved.email;
+  if (!ST.name  && saved.name)  ST.name  = saved.name;
+} catch {}
+
+// Apply brand
+document.documentElement.style.setProperty('--p',  SUITE.primaryColor || '#2563eb');
+document.documentElement.style.setProperty('--ac', SUITE.accentColor  || '#16a34a');
+document.title = SUITE.name || 'Assessment Suite';
+
+/* ── Supabase ── */
+async function sbGet(table, params) {
+  const r = await fetch(`${CFG.supabaseUrl}/rest/v1/${table}?${params}`, {
+    headers: { apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey, Accept: 'application/json' },
+  });
+  if (!r.ok) throw new Error('Supabase GET ' + table + ' ' + r.status);
+  return r.json();
+}
+
+// Has this email submitted a response to this assessment?
+async function isComplete(assessmentId, email) {
+  const params = `select=id,created_at&assessment_id=eq.${enc(assessmentId)}&contact->>Email=eq.${enc(email)}&order=created_at.asc&limit=1`;
+  const rows = await sbGet('ab_responses', params).catch(() => []);
+  return rows && rows.length ? { responseId: rows[0].id, completedAt: rows[0].created_at } : null;
+}
+
+async function refreshStatus(opts = {}) {
+  if (!ST.email || ST.busy) return;
+  ST.busy = true;
+  if (opts.spinner) render();
+  const valid = SUITE.assessments.filter(a => a.id && !/^PASTE_/.test(a.id));
+  await Promise.all(valid.map(async a => {
+    try {
+      const hit = await isComplete(a.id, ST.email);
+      ST.status[a.id] = hit ? { done: true, ...hit } : { done: false };
+    } catch { /* keep prior status */ }
+  }));
+  ST.loaded = true;
+  ST.busy = false;
+  render();
+  maybeFireWebhook();
+}
+
+/* ── Webhook (fires once when every assessment is complete) ── */
+function allDone() {
+  const valid = SUITE.assessments.filter(a => a.id && !/^PASTE_/.test(a.id));
+  return valid.length > 0 && valid.every(a => ST.status[a.id]?.done);
+}
+function firedKey() { return STORE + '__fired__' + ST.email; }
+
+async function maybeFireWebhook() {
+  if (!allDone()) return;
+  if (localStorage.getItem(firedKey())) { if (SUITE.redirectUrl) maybeRedirect(); return; }
+  localStorage.setItem(firedKey(), new Date().toISOString());   // guard against double-fire
+  if (SUITE.webhookUrl) {
+    const payload = {
+      event:      'suite_completed',
+      suiteId:    SUITE.id,
+      suiteName:  SUITE.name,
+      instanceId: (typeof window !== 'undefined' && window.VS_INSTANCE_ID) || null,
+      contact:    { email: ST.email, name: ST.name },
+      completedAt: new Date().toISOString(),
+      assessments: SUITE.assessments
+        .filter(a => a.id && !/^PASTE_/.test(a.id))
+        .map(a => ({ id: a.id, title: a.title, responseId: ST.status[a.id]?.responseId || null, completedAt: ST.status[a.id]?.completedAt || null })),
+    };
+    try {
+      const res = await fetch(SUITE.webhookUrl, { method: 'POST', headers: SUITE.webhookHeaders || { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true });
+      if (!res.ok) console.warn('Suite webhook returned', res.status);
+    } catch (e) {
+      // CORS fallback — fire-and-forget
+      try { await fetch(SUITE.webhookUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), keepalive: true }); }
+      catch (e2) { console.error('Suite webhook failed:', e2.message); localStorage.removeItem(firedKey()); }
+    }
+  }
+  render();
+  maybeRedirect();
+}
+function maybeRedirect() {
+  if (SUITE.redirectUrl) setTimeout(() => { try { (window.top || window).location.href = SUITE.redirectUrl; } catch { location.href = SUITE.redirectUrl; } }, 1800);
+}
+
+/* ── Identity gate ── */
+function startSuite() {
+  const em = (document.getElementById('g-email')?.value || '').trim().toLowerCase();
+  const nm = (document.getElementById('g-name')?.value || '').trim();
+  const err = document.getElementById('g-err');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { if (err) { err.textContent = 'Please enter a valid email address.'; err.style.display = 'block'; } return; }
+  ST.email = em; ST.name = nm;
+  try { localStorage.setItem(STORE + '__id', JSON.stringify({ email: em, name: nm })); } catch {}
+  render();
+  refreshStatus({ spinner: true });
+}
+function switchUser() {
+  ST.email = ''; ST.name = ''; ST.status = {}; ST.loaded = false;
+  try { localStorage.removeItem(STORE + '__id'); } catch {}
+  render();
+}
+
+/* ── Links ── */
+function playerLink(id) {
+  const p = new URLSearchParams();
+  if (ST.email) p.set('email', ST.email);
+  if (ST.name)  p.set('name',  ST.name);
+  return `${CFG.playerOrigin}/a/${id}?${p.toString()}`;
+}
+
+/* ── Render ── */
+function render() {
+  const app = document.getElementById('app');
+  const valid = SUITE.assessments.filter(a => a.id && !/^PASTE_/.test(a.id));
+
+  // Header (shared)
+  const header = `<div class="head">
+    ${SUITE.logoUrl ? `<img src="${esc(SUITE.logoUrl)}" alt="" onerror="this.style.display='none'">` : ''}
+    <h1>${esc(SUITE.name)}</h1>
+    ${SUITE.intro ? `<p>${esc(SUITE.intro)}</p>` : ''}
+  </div>`;
+
+  // Not configured yet
+  if (!valid.length) {
+    app.innerHTML = `<div class="wrap">${header}<div class="center"><i class="ti ti-settings-exclamation"></i><div>No assessments configured yet.<br>Add your assessment IDs in the <b>SUITE.assessments</b> config block.</div></div></div>`;
+    postHeight(); return;
+  }
+
+  // Email gate
+  if (SUITE.requireEmail && !ST.email) {
+    app.innerHTML = `<div class="wrap">${header}
+      <div class="gate">
+        <h2>Let’s get started</h2>
+        <p>Enter your details so we can save your progress across all ${valid.length} assessments.</p>
+        <label for="g-name">Name</label>
+        <input id="g-name" type="text" placeholder="Your name" value="${esc(ST.name)}" autocomplete="name">
+        <label for="g-email">Email</label>
+        <input id="g-email" type="email" placeholder="you@company.com" value="${esc(ST.email)}" autocomplete="email" onkeydown="if(event.key==='Enter')startSuite()">
+        <div class="err" id="g-err"></div>
+        <button class="btn btn-p" onclick="startSuite()"><i class="ti ti-arrow-right"></i> Begin</button>
+      </div>
+      ${powered()}
+    </div>`;
+    postHeight(); return;
+  }
+
+  const doneCount = valid.filter(a => ST.status[a.id]?.done).length;
+  const pct = Math.round((doneCount / valid.length) * 100);
+  const finished = allDone();
+
+  const items = valid.map((a, i) => {
+    const st = ST.status[a.id] || {};
+    const done = !!st.done;
+    return `<div class="item ${done ? 'done' : ''}">
+      <div class="mark">${done ? '<i class="ti ti-check"></i>' : (i + 1)}</div>
+      <div class="item-body">
+        <div class="item-title">${esc(a.title)}</div>
+        ${a.description ? `<div class="item-desc">${esc(a.description)}</div>` : ''}
+      </div>
+      <div class="item-act">
+        ${done
+          ? `<span class="done-tag"><i class="ti ti-circle-check-filled"></i> Completed</span>`
+          : `<a class="btn btn-p" href="${esc(playerLink(a.id))}" target="_blank" rel="noopener"><i class="ti ti-player-play"></i> Start</a>`}
+      </div>
+    </div>`;
+  }).join('');
+
+  app.innerHTML = `<div class="wrap">
+    ${header}
+    ${finished ? `<div class="done-banner">
+      <div class="ring"><i class="ti ti-check"></i></div>
+      <h2>All assessments complete 🎉</h2>
+      <p>Thanks${ST.name ? ', ' + esc(ST.name.split(' ')[0]) : ''}! You’ve finished all ${valid.length}. ${SUITE.webhookUrl ? 'Your results are on their way.' : ''}</p>
+    </div>` : ''}
+
+    <div class="prog">
+      <div class="prog-top">
+        <span class="prog-lbl">Progress</span>
+        <span class="prog-cnt">${doneCount} of ${valid.length} complete</span>
+      </div>
+      <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
+    </div>
+
+    <div class="list">${items}</div>
+
+    <div class="foot">
+      <span class="who">Tracking as <b>${esc(ST.email)}</b></span>
+      <span style="display:flex;gap:14px;align-items:center">
+        <button class="link-btn" onclick="refreshStatus({spinner:false})" ${ST.busy ? 'disabled' : ''}><i class="ti ti-refresh"></i> Refresh status</button>
+        <button class="link-btn" onclick="switchUser()"><i class="ti ti-user-cog"></i> Not you?</button>
+      </span>
+    </div>
+    ${powered()}
+  </div>`;
+  postHeight();
+}
+
+function powered() { return `<div class="poweredby">Powered by VitalSpark</div>`; }
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.innerHTML = `<div class="toast"><i class="ti ti-info-circle"></i> ${esc(msg)}</div>`;
+  setTimeout(() => { t.innerHTML = ''; }, 2600);
+}
+
+/* ── Embed support: tell a host iframe how tall we are ── */
+function postHeight() {
+  try {
+    const h = document.body.scrollHeight;
+    parent.postMessage({ type: 'vs:resize', assessmentId: 'suite:' + SUITE.id, height: h }, '*');
+  } catch {}
+}
+
+/* ── Boot + auto-refresh when the user returns from an assessment ── */
+render();
+if (ST.email) refreshStatus({ spinner: true });
+
+// Re-check completion whenever the page regains focus (user finished in another tab)
+window.addEventListener('focus', () => { if (ST.email && !allDone()) refreshStatus(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && ST.email && !allDone()) refreshStatus(); });
+// Gentle poll while the suite is open and incomplete
+setInterval(() => { if (!document.hidden && ST.email && !allDone()) refreshStatus(); }, 15000);
+window.addEventListener('load', postHeight);
+window.addEventListener('resize', postHeight);
+</script>
+</body>
+</html>
