@@ -1144,7 +1144,7 @@ function suitesNew(folderId){
   S.suiteEdit = {
     id:null, _slugTouched:false,
     slug:'', name: folderId ? ((db.folders.find(f=>f.id===folderId)?.name||'')+' Suite').trim() : '',
-    intro:'', logo_url:b.logoUrl||'', primary_color:b.primaryColor||'#2563eb', accent_color:'#16a34a',
+    intro:'', logo_url:b.logoUrl||'', share_image_url:'', primary_color:b.primaryColor||'#2563eb', accent_color:'#16a34a',
     webhook_url:'', webhook_headers:'{"Content-Type":"application/json"}', redirect_url:'',
   };
   if(S.suiteEdit.name){ S.suiteEdit.slug=slugify(S.suiteEdit.name); }
@@ -1152,7 +1152,7 @@ function suitesNew(folderId){
 }
 function suitesEdit(id){
   const s=(db.suites||[]).find(x=>x.id===id); if(!s) return;
-  S.suiteEdit={ id:s.id, _slugTouched:true, slug:s.slug||'', name:s.name||'', intro:s.intro||'', logo_url:s.logo_url||'',
+  S.suiteEdit={ id:s.id, _slugTouched:true, slug:s.slug||'', name:s.name||'', intro:s.intro||'', logo_url:s.logo_url||'', share_image_url:s.share_image_url||'',
     primary_color:s.primary_color||'#2563eb', accent_color:s.accent_color||'#16a34a',
     webhook_url:s.webhook_url||'', redirect_url:s.redirect_url||'',
     webhook_headers: typeof s.webhook_headers==='string'?s.webhook_headers:JSON.stringify(s.webhook_headers||{'Content-Type':'application/json'}) };
@@ -1175,6 +1175,7 @@ async function saveSuite(){
   e.slug=slugify(document.getElementById('su-slug')?.value||e.slug);
   e.intro=document.getElementById('su-intro')?.value||'';
   e.logo_url=document.getElementById('su-logo')?.value.trim()||'';
+  e.share_image_url=document.getElementById('su-share')?.value.trim()||'';
   e.primary_color=document.getElementById('su-pc')?.value||e.primary_color;
   e.accent_color=document.getElementById('su-ac')?.value||e.accent_color;
   e.webhook_url=document.getElementById('su-wh')?.value.trim()||'';
@@ -1185,7 +1186,7 @@ async function saveSuite(){
   if(!S.suiteSel.length){ toast('Select at least one assessment','err'); return; }
   if((db.suites||[]).some(s=>s.slug===e.slug && s.id!==e.id)){ toast('That slug is already used — pick another','err'); return; }
   let headers; try{ headers=JSON.parse(e.webhook_headers); }catch{ toast('Webhook headers must be valid JSON','err'); return; }
-  const row={ id:e.id||uid(), slug:e.slug, name:e.name, intro:e.intro, logo_url:e.logo_url,
+  const row={ id:e.id||uid(), slug:e.slug, name:e.name, intro:e.intro, logo_url:e.logo_url, share_image_url:e.share_image_url,
     primary_color:e.primary_color, accent_color:e.accent_color, webhook_url:e.webhook_url,
     webhook_headers:headers, redirect_url:e.redirect_url, assessment_ids:[...S.suiteSel],
     folder_id:S.suiteFolderFilter||null, instance_id:getInstanceId(), owner_id:_userId, tenant_id:_tenantId };
@@ -1246,6 +1247,7 @@ function rSuiteEditor(){
         <div class="fg"><label>URL slug</label><input id="su-slug" type="text" value="${esc(e.slug)}" placeholder="acme" oninput="suiteOnSlug(this.value)"></div>
         <div class="fg"><label>Intro text</label><textarea id="su-intro" rows="2" placeholder="Shown under the title" oninput="suiteField('intro',this.value)">${esc(e.intro)}</textarea></div>
         <div class="fg"><label>Logo URL</label><input id="su-logo" type="url" value="${esc(e.logo_url)}" placeholder="https://…/logo.png" oninput="suiteField('logo_url',this.value)"></div>
+        <div class="fg"><label>Share / preview image URL <span style="text-transform:none;letter-spacing:0;color:#94a3b8;font-weight:500">— shown when the link is texted (1200×630)</span></label><input id="su-share" type="url" value="${esc(e.share_image_url||'')}" placeholder="https://…/share-card.png" oninput="suiteField('share_image_url',this.value)"></div>
         <div style="display:flex;gap:14px">
           <div class="fg" style="flex:1"><label>Primary color</label><input id="su-pc" type="color" value="${esc(e.primary_color)}" oninput="suiteField('primary_color',this.value)"></div>
           <div class="fg" style="flex:1"><label>Accent (done)</label><input id="su-ac" type="color" value="${esc(e.accent_color)}" oninput="suiteField('accent_color',this.value)"></div>
