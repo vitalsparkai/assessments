@@ -394,6 +394,7 @@ async function loadAll(){
     projects:    [],
     folders:     [],
     suites:      [],
+    suiteSignins:[],
   };
   // Projects/folders — optional, fail silently
   db.projects = await sbGet('ab_projects',`owner_id=eq.${_userId||_session?.user?.id}&instance_id=eq.${iid}&order=created_at`).catch(()=>[]);
@@ -403,6 +404,9 @@ async function loadAll(){
   // White-label suites — optional, fail silently
   db.suites = await sbGet('ab_suites', `tenant_id=eq.${_tenantId}&order=created_at.desc`).catch(()=>[]);
   if (!Array.isArray(db.suites)) db.suites = [];
+  // Suite sign-ins (people who started a suite, incl. before submitting anything)
+  db.suiteSignins = await sbGet('ab_suite_signins', `tenant_id=eq.${_tenantId}&order=created_at.desc`).catch(()=>[]);
+  if (!Array.isArray(db.suiteSignins)) db.suiteSignins = [];
   // Restore locally-stored projects/folders (they live in localStorage, not Supabase)
   loadLocal();
   // Per-assessment data — each wrapped individually so one bad assessment can't crash all
@@ -1206,20 +1210,13 @@ async function delSuite(id){
 // Per-suite progress from loaded responses: a person is "complete" when they
 // have a response for every assessment in the suite, "in progress" with 1+ but
 // not all. Counts by (lower-cased) contact email across the suite's assessments.
+// Complete = a response for every assessment in the suite.
+// In progress = at least one response OR signed in, but not complete.
 function suiteStats(suite){
-  const ids=(suite.assessment_ids||[]).filter(id=>db.assessments.some(a=>a.id===id));
+  const {ids, people}=suiteRespondents(suite);
   const total=ids.length;
-  if(!total) return {total:0, complete:0, inProgress:0};
-  const byEmail={};
-  ids.forEach(aid=>{
-    (db.responses[aid]||[]).forEach(r=>{
-      const em=((r.contact&&(r.contact.Email||r.contact.email))||'').trim().toLowerCase();
-      if(!em) return;
-      (byEmail[em]=byEmail[em]||new Set()).add(aid);
-    });
-  });
   let complete=0, inProgress=0;
-  Object.values(byEmail).forEach(set=>{ if(set.size>=total) complete++; else if(set.size>0) inProgress++; });
+  people.forEach(p=>{ if(total && p.done.size>=total) complete++; else if(p.done.size>0||p.signedIn) inProgress++; });
   return {total, complete, inProgress};
 }
 
@@ -1228,12 +1225,13 @@ function suiteStats(suite){
 function suiteRespondents(suite){
   const ids=(suite.assessment_ids||[]).filter(id=>db.assessments.some(a=>a.id===id));
   const people={};
+  const get=em=>people[em]||(people[em]={email:em, name:'', team:'', done:new Set(), last:null, signedIn:false});
   ids.forEach(aid=>{
     (db.responses[aid]||[]).forEach(r=>{
       const c=r.contact||{};
       const em=((c.Email||c.email)||'').trim().toLowerCase();
       if(!em) return;
-      let p=people[em]||(people[em]={email:em, name:'', team:'', done:new Set(), last:null});
+      const p=get(em);
       p.done.add(aid);
       const nm=[c['First Name'],c['Last Name']].filter(Boolean).join(' ').trim();
       if(nm && !p.name) p.name=nm;
@@ -1243,6 +1241,16 @@ function suiteRespondents(suite){
       if(t && (!p.last || new Date(t)>new Date(p.last))) p.last=t;
     });
   });
+  // Fold in sign-ins (people who started the suite, maybe before submitting)
+  (db.suiteSignins||[]).forEach(si=>{
+    if(si.suite_slug!==suite.slug) return;
+    const em=(si.email||'').trim().toLowerCase(); if(!em) return;
+    const p=get(em); p.signedIn=true;
+    const nm=[si.first_name,si.last_name].filter(Boolean).join(' ').trim();
+    if(nm && !p.name) p.name=nm;
+    if(!p.team && si.team_code) p.team=si.team_code;
+    if(si.created_at && (!p.last || new Date(si.created_at)>new Date(p.last))) p.last=si.created_at;
+  });
   return { ids, people:Object.values(people) };
 }
 function goToSuiteDetail(id){ S.suiteView=id; S.suiteViewFilter='all'; render(); }
@@ -1250,7 +1258,7 @@ function suiteViewFilterSet(f){ S.suiteViewFilter=f; render(); }
 function copyInProgressEmails(id){
   const s=(db.suites||[]).find(x=>x.id===id); if(!s) return;
   const {ids,people}=suiteRespondents(s);
-  const emails=people.filter(p=>p.done.size>0 && p.done.size<ids.length).map(p=>p.email);
+  const emails=people.filter(p=>(p.done.size>0||p.signedIn) && !(ids.length && p.done.size>=ids.length)).map(p=>p.email);
   if(!emails.length){ toast('No in-progress emails','err'); return; }
   copyText(emails.join(', '));
 }
@@ -1261,7 +1269,7 @@ function rSuiteRespondents(){
   const {ids,people}=suiteRespondents(s);
   const cols=ids.map(id=>db.assessments.find(a=>a.id===id)).filter(Boolean);
   const total=ids.length;
-  const statusOf=p=> p.done.size>=total ? 'complete' : (p.done.size>0 ? 'inprogress' : 'none');
+  const statusOf=p=> (total && p.done.size>=total) ? 'complete' : ((p.done.size>0||p.signedIn) ? 'inprogress' : 'none');
   const filtered=people
     .filter(p=>{ const st=statusOf(p); return S.suiteViewFilter==='all' || S.suiteViewFilter===st; })
     .sort((a,b)=> (a.done.size===b.done.size) ? (a.name||a.email).localeCompare(b.name||b.email) : a.done.size-b.done.size);

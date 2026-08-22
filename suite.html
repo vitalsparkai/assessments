@@ -155,6 +155,31 @@ async function sbGet(table, params) {
   if (!r.ok) throw new Error('Supabase GET ' + table + ' ' + r.status);
   return r.json();
 }
+async function sbInsert(table, row) {
+  return fetch(`${CFG.supabaseUrl}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { apikey: CFG.supabaseKey, Authorization: 'Bearer ' + CFG.supabaseKey, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify(row),
+  });
+}
+
+// Record a sign-in so the builder can count people who started the suite even
+// before they submit any assessment. Fires once per suite+email per browser.
+async function recordSignin() {
+  if (!SUITE || !ST.email) return;
+  const key = STORE + '__signedin__' + ST.email;
+  try { if (localStorage.getItem(key)) return; } catch {}
+  try {
+    await sbInsert('ab_suite_signins', {
+      suite_slug: SUITE.slug, email: ST.email,
+      first_name: ST.firstName || null, last_name: ST.lastName || null,
+      team_code: ST.teamCode || null,
+      instance_id: (typeof window !== 'undefined' && window.VS_INSTANCE_ID) || null,
+      tenant_id: SUITE.tenant_id || null,
+    });
+    try { localStorage.setItem(key, '1'); } catch {}
+  } catch { /* best-effort; ignore */ }
+}
 
 // Completion = a response row for this assessment with this email
 async function isComplete(assessmentId, email) {
@@ -244,6 +269,7 @@ function startSuite() {
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return fail('Please enter a valid email address.');
   ST.firstName = fn; ST.lastName = ln; ST.email = em; ST.teamCode = tc;
   try { localStorage.setItem(STORE + '__id', JSON.stringify({ firstName: fn, lastName: ln, email: em, teamCode: tc })); } catch {}
+  recordSignin();
   render();
   refreshStatus({ spinner: true });
 }
@@ -282,6 +308,7 @@ async function resumeSuite() {
   ST.firstName = c['First Name'] || ''; ST.lastName = c['Last Name'] || '';
   ST.email = em; ST.teamCode = c['Team Code (Optional):'] || '';
   try { localStorage.setItem(STORE + '__id', JSON.stringify({ firstName: ST.firstName, lastName: ST.lastName, email: em, teamCode: ST.teamCode })); } catch {}
+  recordSignin();
   render();
   refreshStatus({ spinner: true });
 }
