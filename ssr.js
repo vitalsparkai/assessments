@@ -16,7 +16,7 @@ const SUPA_KEY    = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cC
 const SUITE_HTML  = process.env.SUITE_HTML || '/usr/share/nginx/html/suite.html';
 // Fallback preview image for suites that have no share image or logo set.
 // Swap for a proper 1200×630 card when you have one (or set DEFAULT_SHARE_IMAGE).
-const DEFAULT_SHARE_IMAGE = process.env.DEFAULT_SHARE_IMAGE || 'https://vitalspark.ai/wp-content/uploads/2024/02/vitalspark-logo-horiz-dark-color.png';
+const DEFAULT_SHARE_IMAGE = process.env.DEFAULT_SHARE_IMAGE || 'https://vitalspark.ai/wp-content/uploads/2024/03/vitalspark-ss.png';
 
 const BASE = fs.readFileSync(SUITE_HTML, 'utf8');
 
