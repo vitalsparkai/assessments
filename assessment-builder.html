@@ -632,7 +632,7 @@ async function fireWH(asm,resp,dims){
 }
 
 /* ══ STATE ══ */
-const S={view:'home',asmId:null,tab:'gen',answers:{},contact:{},step:0,preview:false,doneResp:null,modal:null,expandedSecs:{},shuffledOrders:{},selMode:false,sel:[],whitelabel:null,suiteEdit:null,suiteSel:[],suiteFolderFilter:''};
+const S={view:'home',asmId:null,tab:'gen',answers:{},contact:{},step:0,preview:false,doneResp:null,modal:null,expandedSecs:{},shuffledOrders:{},selMode:false,sel:[],whitelabel:null,suiteEdit:null,suiteSel:[],suiteFolderFilter:'',suiteView:null,suiteViewFilter:'all'};
 let _drag=null;
 
 function dSt(e,qId,optId){
@@ -1223,7 +1223,88 @@ function suiteStats(suite){
   return {total, complete, inProgress};
 }
 
+// Per-respondent breakdown: one entry per person (by email) with the set of
+// assessments they've completed within the suite.
+function suiteRespondents(suite){
+  const ids=(suite.assessment_ids||[]).filter(id=>db.assessments.some(a=>a.id===id));
+  const people={};
+  ids.forEach(aid=>{
+    (db.responses[aid]||[]).forEach(r=>{
+      const c=r.contact||{};
+      const em=((c.Email||c.email)||'').trim().toLowerCase();
+      if(!em) return;
+      let p=people[em]||(people[em]={email:em, name:'', team:'', done:new Set(), last:null});
+      p.done.add(aid);
+      const nm=[c['First Name'],c['Last Name']].filter(Boolean).join(' ').trim();
+      if(nm && !p.name) p.name=nm;
+      const tc=(c['Team Code (Optional):']||c.teamCode||'').trim();
+      if(tc && !p.team) p.team=tc;
+      const t=r.created_at||r.createdAt;
+      if(t && (!p.last || new Date(t)>new Date(p.last))) p.last=t;
+    });
+  });
+  return { ids, people:Object.values(people) };
+}
+function goToSuiteDetail(id){ S.suiteView=id; S.suiteViewFilter='all'; render(); }
+function suiteViewFilterSet(f){ S.suiteViewFilter=f; render(); }
+function copyInProgressEmails(id){
+  const s=(db.suites||[]).find(x=>x.id===id); if(!s) return;
+  const {ids,people}=suiteRespondents(s);
+  const emails=people.filter(p=>p.done.size>0 && p.done.size<ids.length).map(p=>p.email);
+  if(!emails.length){ toast('No in-progress emails','err'); return; }
+  copyText(emails.join(', '));
+}
+
+function rSuiteRespondents(){
+  const s=(db.suites||[]).find(x=>x.id===S.suiteView);
+  if(!s) { S.suiteView=null; return rSuites(); }
+  const {ids,people}=suiteRespondents(s);
+  const cols=ids.map(id=>db.assessments.find(a=>a.id===id)).filter(Boolean);
+  const total=ids.length;
+  const statusOf=p=> p.done.size>=total ? 'complete' : (p.done.size>0 ? 'inprogress' : 'none');
+  const filtered=people
+    .filter(p=>{ const st=statusOf(p); return S.suiteViewFilter==='all' || S.suiteViewFilter===st; })
+    .sort((a,b)=> (a.done.size===b.done.size) ? (a.name||a.email).localeCompare(b.name||b.email) : a.done.size-b.done.size);
+  const nComplete=people.filter(p=>statusOf(p)==='complete').length;
+  const nProg=people.filter(p=>statusOf(p)==='inprogress').length;
+  const chip=(active,label,val,onclick,color)=>`<button onclick="${onclick}" class="btn bsm" style="background:${active?color.bg:'#1e293b'};border:1px solid ${active?color.bd:'#334155'};color:${active?color.tx:'#94a3b8'}">${label} <b>${val}</b></button>`;
+  const shortT=t=>{ t=t.replace(/^VitalSpark\s+/i,'').replace(/\s+Assessment$/i,''); return t.length>16?t.slice(0,15)+'…':t; };
+  return `<div class="content">
+    <div class="ph">
+      <div class="fx ic g3"><button class="btn bg bic" onclick="S.suiteView=null;render()"><i class="ti ti-arrow-left"></i></button>
+        <div><h1>${esc(s.name)}</h1><p class="ph-sub"><i class="ti ti-link"></i> /s/${esc(s.slug)} · ${people.length} respondent${people.length!==1?'s':''}</p></div>
+      </div>
+      <div class="fx g2"><button class="btn bs" onclick="copyInProgressEmails('${s.id}')" title="Copy emails of everyone still in progress"><i class="ti ti-mail"></i> Copy in-progress emails</button></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      ${chip(S.suiteViewFilter==='all','All',people.length,"suiteViewFilterSet('all')",{bg:'#1e3a5f',bd:'#3b82f6',tx:'#60a5fa'})}
+      ${chip(S.suiteViewFilter==='complete','Complete',nComplete,"suiteViewFilterSet('complete')",{bg:'#064e3b',bd:'#10b981',tx:'#6ee7b7'})}
+      ${chip(S.suiteViewFilter==='inprogress','In progress',nProg,"suiteViewFilterSet('inprogress')",{bg:'#451a03',bd:'#d97706',tx:'#fcd34d'})}
+    </div>
+    <div class="card" style="padding:0;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr>
+          <th style="text-align:left">Name</th><th style="text-align:left">Email</th><th style="text-align:left">Team</th>
+          ${cols.map(a=>`<th style="text-align:center" title="${esc(a.title)}">${esc(shortT(a.title))}</th>`).join('')}
+          <th style="text-align:center">Status</th>
+        </tr></thead>
+        <tbody>
+          ${filtered.length?filtered.map(p=>{const st=statusOf(p);return `<tr>
+            <td style="font-weight:600">${esc(p.name||'—')}</td>
+            <td style="color:#64748b">${esc(p.email)}</td>
+            <td style="color:#64748b">${esc(p.team||'—')}</td>
+            ${cols.map(a=>`<td style="text-align:center">${p.done.has(a.id)?'<i class="ti ti-circle-check-filled" style="color:#16a34a"></i>':'<i class="ti ti-minus" style="color:#cbd5e1"></i>'}</td>`).join('')}
+            <td style="text-align:center">${st==='complete'?'<span class="bdg bsuc">Complete</span>':`<span class="bdg bwrn">${p.done.size}/${total}</span>`}</td>
+          </tr>`;}).join(''):`<tr><td colspan="${cols.length+4}" style="text-align:center;color:#64748b;padding:24px">No respondents in this view.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:11.5px;color:#94a3b8;margin-top:10px"><i class="ti ti-info-circle"></i> Empty cells are assessments each person still has left. Based on loaded responses (up to 500 per assessment).</p>
+  </div>`;
+}
+
 function rSuites(){
+  if(S.suiteView) return rSuiteRespondents();
   if(S.suiteEdit) return rSuiteEditor();
   const suites=db.suites||[];
   return `<div class="content">
@@ -1236,11 +1317,12 @@ function rSuites(){
         <div style="font-size:15px;font-weight:600;margin-bottom:4px">${esc(s.name)}</div>
         <div style="font-size:12px;color:#64748b;margin-bottom:8px"><i class="ti ti-link"></i> /s/${esc(s.slug)} · ${cnt} assessment${cnt!==1?'s':''}</div>
         <div style="display:flex;gap:8px;margin-bottom:10px">
-          <span style="display:inline-flex;align-items:center;gap:5px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600"><i class="ti ti-circle-check-filled"></i> ${st.complete} complete</span>
-          <span style="display:inline-flex;align-items:center;gap:5px;background:#fffbeb;color:#b45309;border:1px solid #fde68a;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600"><i class="ti ti-progress"></i> ${st.inProgress} in progress</span>
+          <span onclick="S.suiteViewFilter='complete';goToSuiteDetail('${s.id}')" title="View completed respondents" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600"><i class="ti ti-circle-check-filled"></i> ${st.complete} complete</span>
+          <span onclick="S.suiteViewFilter='inprogress';goToSuiteDetail('${s.id}')" title="View in-progress respondents" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;background:#fffbeb;color:#b45309;border:1px solid #fde68a;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600"><i class="ti ti-progress"></i> ${st.inProgress} in progress</span>
         </div>
         <div style="font-size:12px;color:#64748b;margin-bottom:12px">${s.webhook_url?`<i class="ti ti-webhook"></i> webhook set`:`<span style="color:#cbd5e1">no webhook</span>`}</div>
         <div class="acard-actions fx g2">
+          <button class="btn bsm" onclick="goToSuiteDetail('${s.id}')"><i class="ti ti-users"></i> Respondents</button>
           <button class="btn bsm" onclick="suitesEdit('${s.id}')"><i class="ti ti-pencil"></i> Edit</button>
           <button class="btn bsm" onclick="copyText('${esc(suiteLink(s.slug))}')"><i class="ti ti-copy"></i> Copy link</button>
           <a class="btn bsm" href="${esc(suiteLink(s.slug))}" target="_blank" rel="noopener" style="margin-left:auto" title="Open"><i class="ti ti-external-link"></i></a>
