@@ -637,7 +637,7 @@ async function fireWH(asm,resp,dims){
 }
 
 /* ══ STATE ══ */
-const S={view:'home',asmId:null,tab:'gen',answers:{},contact:{},step:0,preview:false,doneResp:null,modal:null,expandedSecs:{},shuffledOrders:{},selMode:false,sel:[],whitelabel:null,suiteEdit:null,suiteSel:[],suiteFolderFilter:'',suiteView:null,suiteViewFilter:'all'};
+const S={view:'home',asmId:null,tab:'gen',answers:{},contact:{},step:0,preview:false,doneResp:null,modal:null,expandedSecs:{},shuffledOrders:{},selMode:false,sel:[],whitelabel:null,suiteEdit:null,suiteSel:[],suiteFolderFilter:'',suiteView:null,suiteViewFilter:'all',suiteViewTeam:''};
 let _drag=null;
 
 function dSt(e,qId,optId){
@@ -1254,12 +1254,15 @@ function suiteRespondents(suite){
   });
   return { ids, people:Object.values(people) };
 }
-function goToSuiteDetail(id, filter){ S.suiteView=id; S.suiteViewFilter=filter||'all'; render(); }
+function goToSuiteDetail(id, filter){ S.suiteView=id; S.suiteViewFilter=filter||'all'; S.suiteViewTeam=''; render(); }
 function suiteViewFilterSet(f){ S.suiteViewFilter=f; render(); }
+function suiteViewTeamSet(v){ S.suiteViewTeam=v; render(); }
 function copyInProgressEmails(id){
   const s=(db.suites||[]).find(x=>x.id===id); if(!s) return;
   const {ids,people}=suiteRespondents(s);
-  const emails=people.filter(p=>(p.done.size>0||p.signedIn) && !(ids.length && p.done.size>=ids.length)).map(p=>p.email);
+  const tf=S.suiteViewTeam||'';
+  const inTeam=p=> !tf ? true : (tf==='__none__' ? !p.team : p.team===tf);
+  const emails=people.filter(inTeam).filter(p=>(p.done.size>0||p.signedIn) && !(ids.length && p.done.size>=ids.length)).map(p=>p.email);
   if(!emails.length){ toast('No in-progress emails','err'); return; }
   copyText(emails.join(', '));
 }
@@ -1271,13 +1274,25 @@ function rSuiteRespondents(){
   const cols=ids.map(id=>db.assessments.find(a=>a.id===id)).filter(Boolean);
   const total=ids.length;
   const statusOf=p=> (total && p.done.size>=total) ? 'complete' : ((p.done.size>0||p.signedIn) ? 'inprogress' : 'none');
-  const filtered=people
+  // Team codes present among respondents
+  const teams=[...new Set(people.map(p=>p.team).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const hasNoTeam=people.some(p=>!p.team);
+  const teamF=S.suiteViewTeam||'';
+  const inTeam=p=> !teamF ? true : (teamF==='__none__' ? !p.team : p.team===teamF);
+  // Population after applying the team filter (drives counts + table)
+  const population=people.filter(inTeam);
+  const filtered=population
     .filter(p=>{ const st=statusOf(p); return S.suiteViewFilter==='all' || S.suiteViewFilter===st; })
     .sort((a,b)=> (a.done.size===b.done.size) ? (a.name||a.email).localeCompare(b.name||b.email) : a.done.size-b.done.size);
-  const nComplete=people.filter(p=>statusOf(p)==='complete').length;
-  const nProg=people.filter(p=>statusOf(p)==='inprogress').length;
+  const nComplete=population.filter(p=>statusOf(p)==='complete').length;
+  const nProg=population.filter(p=>statusOf(p)==='inprogress').length;
   const chip=(active,label,val,onclick,color)=>`<button onclick="${onclick}" class="btn bsm" style="background:${active?color.bg:'#1e293b'};border:1px solid ${active?color.bd:'#334155'};color:${active?color.tx:'#94a3b8'}">${label} <b>${val}</b></button>`;
   const shortT=t=>{ t=t.replace(/^VitalSpark\s+/i,'').replace(/\s+Assessment$/i,''); return t.length>16?t.slice(0,15)+'…':t; };
+  const teamSelect=(teams.length||hasNoTeam)?`<select onchange="suiteViewTeamSet(this.value)" title="Filter by team code" style="width:auto;padding:6px 10px;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:7px;font-size:13px">
+      <option value="">All teams</option>
+      ${teams.map(t=>`<option value="${esc(t)}" ${teamF===t?'selected':''}>${esc(t)}</option>`).join('')}
+      ${hasNoTeam?`<option value="__none__" ${teamF==='__none__'?'selected':''}>(no team code)</option>`:''}
+    </select>`:'';
   return `<div class="content">
     <div class="ph">
       <div class="fx ic g3"><button class="btn bg bic" onclick="S.suiteView=null;render()"><i class="ti ti-arrow-left"></i></button>
@@ -1285,10 +1300,11 @@ function rSuiteRespondents(){
       </div>
       <div class="fx g2"><button class="btn bs" onclick="copyInProgressEmails('${s.id}')" title="Copy emails of everyone still in progress"><i class="ti ti-mail"></i> Copy in-progress emails</button></div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      ${chip(S.suiteViewFilter==='all','All',people.length,"suiteViewFilterSet('all')",{bg:'#1e3a5f',bd:'#3b82f6',tx:'#60a5fa'})}
+    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
+      ${chip(S.suiteViewFilter==='all','All',population.length,"suiteViewFilterSet('all')",{bg:'#1e3a5f',bd:'#3b82f6',tx:'#60a5fa'})}
       ${chip(S.suiteViewFilter==='complete','Complete',nComplete,"suiteViewFilterSet('complete')",{bg:'#064e3b',bd:'#10b981',tx:'#6ee7b7'})}
       ${chip(S.suiteViewFilter==='inprogress','In progress',nProg,"suiteViewFilterSet('inprogress')",{bg:'#451a03',bd:'#d97706',tx:'#fcd34d'})}
+      ${teamSelect?`<span style="margin-left:auto;display:flex;align-items:center;gap:6px"><i class="ti ti-users-group" style="color:#94a3b8;font-size:15px"></i>${teamSelect}</span>`:''}
     </div>
     <div class="card" style="padding:0;overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
