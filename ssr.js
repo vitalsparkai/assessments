@@ -14,6 +14,9 @@ const PORT        = Number(process.env.SUITE_SSR_PORT || 8787);
 const SUPA_URL    = process.env.SUPABASE_URL || 'https://owouiukkteoentgpbrlk.supabase.co';
 const SUPA_KEY    = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93b3VpdWtrdGVvZW50Z3BicmxrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NjQxNzcsImV4cCI6MjA5NTM0MDE3N30.NOPj0iARb1bExfBv2t8KvFktLTisp2OPE95dM_C7TJw';
 const SUITE_HTML  = process.env.SUITE_HTML || '/usr/share/nginx/html/suite.html';
+// Fallback preview image for suites that have no share image or logo set.
+// Swap for a proper 1200×630 card when you have one (or set DEFAULT_SHARE_IMAGE).
+const DEFAULT_SHARE_IMAGE = process.env.DEFAULT_SHARE_IMAGE || 'https://vitalspark.ai/wp-content/uploads/2024/02/vitalspark-logo-horiz-dark-color.png';
 
 const BASE = fs.readFileSync(SUITE_HTML, 'utf8');
 
@@ -21,7 +24,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace
 function slugFrom(url){ const m = String(url||'').match(/^\/s(?:uite)?\/([^/?#]+)/i); return m ? decodeURIComponent(m[1]) : ''; }
 
 function inject(html, suite){
-  const img   = esc(suite.share_image_url || suite.logo_url || '');
+  const img   = esc(suite.share_image_url || suite.logo_url || DEFAULT_SHARE_IMAGE);
   const title = esc(suite.name || 'Assessment Suite');
   const desc  = esc(suite.intro || '');
   // Replacement FUNCTIONS so a '$' in any value can't be treated as a
