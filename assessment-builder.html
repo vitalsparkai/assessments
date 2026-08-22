@@ -1171,7 +1171,7 @@ function suiteOnSlug(v){ S.suiteEdit._slugTouched=true; const s=slugify(v); cons
 function suiteToggleAsm(id){ const i=S.suiteSel.indexOf(id); if(i>=0) S.suiteSel.splice(i,1); else S.suiteSel.push(id); render(); }
 function suiteAddFolder(fid){ if(!fid) return; db.assessments.filter(a=>a.folder_id===fid).forEach(a=>{ if(!S.suiteSel.includes(a.id)) S.suiteSel.push(a.id); }); render(); }
 function suiteMove(id,dir){ const i=S.suiteSel.indexOf(id); if(i<0) return; const j=i+dir; if(j<0||j>=S.suiteSel.length) return; const t=S.suiteSel[i]; S.suiteSel[i]=S.suiteSel[j]; S.suiteSel[j]=t; render(); }
-function copyText(t){ (navigator.clipboard?.writeText(t)||Promise.reject()).then(()=>toast('Link copied ✓')).catch(()=>toast('Copy failed','err')); }
+function copyText(t,msg){ (navigator.clipboard?.writeText(t)||Promise.reject()).then(()=>toast(msg||'Link copied ✓')).catch(()=>toast('Copy failed','err')); }
 
 async function saveSuite(){
   const e=S.suiteEdit; if(!e) return;
@@ -1546,6 +1546,7 @@ function rHome(){
           ${S.selMode?'':`<div class="acard-actions fx g2">
             <button class="btn bsm" onclick="editAsm('${a.id}')"><i class="ti ti-pencil"></i> Edit</button>
             <button class="btn bsm" onclick="S.asmId='${a.id}';goTo('res')"><i class="ti ti-users"></i> Results</button>
+            <button class="btn bsm" onclick="copyText('${a.id}','Assessment ID copied ✓')" title="Copy assessment ID"><i class="ti ti-id"></i></button>
             <button class="btn bsm" onclick="dupAsm('${a.id}')" title="Duplicate"><i class="ti ti-copy"></i></button>
             <button class="btn bsm" style="margin-left:auto" onclick="openMoveAsm('${a.id}')" title="Move to folder"><i class="ti ti-folder-arrow-right"></i></button>
             <button class="btn bsm" style="color:#ef4444" onclick="dlAsm('${a.id}')"><i class="ti ti-trash"></i></button>
