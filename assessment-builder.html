@@ -1203,6 +1203,26 @@ async function delSuite(id){
   db.suites=(db.suites||[]).filter(s=>s.id!==id); render(); toast('Suite deleted');
 }
 
+// Per-suite progress from loaded responses: a person is "complete" when they
+// have a response for every assessment in the suite, "in progress" with 1+ but
+// not all. Counts by (lower-cased) contact email across the suite's assessments.
+function suiteStats(suite){
+  const ids=(suite.assessment_ids||[]).filter(id=>db.assessments.some(a=>a.id===id));
+  const total=ids.length;
+  if(!total) return {total:0, complete:0, inProgress:0};
+  const byEmail={};
+  ids.forEach(aid=>{
+    (db.responses[aid]||[]).forEach(r=>{
+      const em=((r.contact&&(r.contact.Email||r.contact.email))||'').trim().toLowerCase();
+      if(!em) return;
+      (byEmail[em]=byEmail[em]||new Set()).add(aid);
+    });
+  });
+  let complete=0, inProgress=0;
+  Object.values(byEmail).forEach(set=>{ if(set.size>=total) complete++; else if(set.size>0) inProgress++; });
+  return {total, complete, inProgress};
+}
+
 function rSuites(){
   if(S.suiteEdit) return rSuiteEditor();
   const suites=db.suites||[];
@@ -1211,10 +1231,14 @@ function rSuites(){
       <div><h1>Suites</h1><p class="ph-sub">White-label progress pages — one shareable link per client that fires a webhook when all assessments are complete</p></div>
       <button class="btn bp" onclick="suitesNew()"><i class="ti ti-plus"></i> New Suite</button>
     </div>
-    ${suites.length?`<div class="agrid">${suites.map(s=>{const cnt=(s.assessment_ids||[]).length;return `<div class="acard" style="border-top:3px solid ${esc(s.primary_color||'#2563eb')}">
+    ${suites.length?`<div class="agrid">${suites.map(s=>{const cnt=(s.assessment_ids||[]).length;const st=suiteStats(s);return `<div class="acard" style="border-top:3px solid ${esc(s.primary_color||'#2563eb')}">
         ${s.logo_url?`<img src="${esc(s.logo_url)}" style="height:24px;object-fit:contain;margin-bottom:10px" onerror="this.style.display='none'" alt="">`:''}
         <div style="font-size:15px;font-weight:600;margin-bottom:4px">${esc(s.name)}</div>
-        <div style="font-size:12px;color:#64748b;margin-bottom:6px"><i class="ti ti-link"></i> /s/${esc(s.slug)} · ${cnt} assessment${cnt!==1?'s':''}</div>
+        <div style="font-size:12px;color:#64748b;margin-bottom:8px"><i class="ti ti-link"></i> /s/${esc(s.slug)} · ${cnt} assessment${cnt!==1?'s':''}</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <span style="display:inline-flex;align-items:center;gap:5px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600"><i class="ti ti-circle-check-filled"></i> ${st.complete} complete</span>
+          <span style="display:inline-flex;align-items:center;gap:5px;background:#fffbeb;color:#b45309;border:1px solid #fde68a;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600"><i class="ti ti-progress"></i> ${st.inProgress} in progress</span>
+        </div>
         <div style="font-size:12px;color:#64748b;margin-bottom:12px">${s.webhook_url?`<i class="ti ti-webhook"></i> webhook set`:`<span style="color:#cbd5e1">no webhook</span>`}</div>
         <div class="acard-actions fx g2">
           <button class="btn bsm" onclick="suitesEdit('${s.id}')"><i class="ti ti-pencil"></i> Edit</button>
