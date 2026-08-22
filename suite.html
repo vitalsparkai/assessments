@@ -69,6 +69,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .gate .row2 label{margin-top:0}
 .gate .btn-p{width:100%;justify-content:center;margin-top:22px;padding:11px}
 .gate .err{color:#dc2626;font-size:12.5px;margin-top:8px;display:none}
+.gate-alt{text-align:center;font-size:12.5px;color:var(--mut);margin-top:16px;padding-top:16px;border-top:1px solid var(--bd)}
+.linklike{background:none;border:none;color:var(--p);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;padding:0}
+.linklike:hover{text-decoration:underline}
 
 /* States */
 .center{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:14px;color:var(--mut);text-align:center;padding:30px}
@@ -122,6 +125,7 @@ const ST = {
   status: {},   // { [assessmentId]: { done, responseId, completedAt } }
   loaded: false,
   busy: false,
+  gateMode: 'start',   // 'start' (new) | 'resume' (returning — email only)
 };
 const fullName = () => [ST.firstName, ST.lastName].filter(Boolean).join(' ').trim();
 
@@ -227,9 +231,41 @@ function startSuite() {
 }
 function switchUser() {
   ST.firstName = ST.lastName = ST.email = ST.teamCode = '';
-  ST.status = {}; ST.loaded = false;
+  ST.status = {}; ST.loaded = false; ST.gateMode = 'start';
   try { localStorage.removeItem(STORE + '__id'); } catch {}
   render();
+}
+function setGateMode(m) { ST.gateMode = m; render(); }
+
+// Returning user: look up any submitted response for this email across the
+// suite's assessments and recover their identity + progress.
+async function resumeByEmail(email) {
+  const ids = ASSESS.map(a => a.id);
+  if (!ids.length) return null;
+  const inList = ids.map(enc).join(',');
+  const rows = await sbGet('ab_responses',
+    `select=contact,created_at&assessment_id=in.(${inList})&contact->>Email=eq.${enc(email)}&order=created_at.desc&limit=1`
+  ).catch(() => []);
+  return rows && rows.length ? rows[0] : null;
+}
+async function resumeSuite() {
+  const em = (document.getElementById('g-remail')?.value || '').trim().toLowerCase();
+  const err = document.getElementById('g-err');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { if (err) { err.textContent = 'Please enter a valid email address.'; err.style.display = 'block'; } return; }
+  const btn = document.getElementById('g-resume-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader"></i> Looking you up…'; }
+  const found = await resumeByEmail(em);
+  if (!found) {
+    if (err) { err.innerHTML = 'No saved progress found for <b>' + esc(em) + '</b>. If this is your first time, start the assessments.'; err.style.display = 'block'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-history"></i> Continue'; }
+    return;
+  }
+  const c = found.contact || {};
+  ST.firstName = c['First Name'] || ''; ST.lastName = c['Last Name'] || '';
+  ST.email = em; ST.teamCode = c['Team Code (Optional):'] || '';
+  try { localStorage.setItem(STORE + '__id', JSON.stringify({ firstName: ST.firstName, lastName: ST.lastName, email: em, teamCode: ST.teamCode })); } catch {}
+  render();
+  refreshStatus({ spinner: true });
 }
 
 /* ── Links — pass identity so each assessment records the same person ── */
@@ -268,10 +304,17 @@ function render() {
     return;
   }
 
-  // Identity gate
+  // Identity gate — "start" (new) or "resume" (returning, email only)
   if (!ST.email) {
-    app.innerHTML = `<div class="wrap">${header}
-      <div class="gate">
+    const body = ST.gateMode === 'resume' ? `
+        <h2>Welcome back</h2>
+        <p>Enter the email you started with and we’ll pick up right where you left off.</p>
+        <label for="g-remail">Email</label>
+        <input id="g-remail" type="email" placeholder="you@company.com" value="" autocomplete="email" onkeydown="if(event.key==='Enter')resumeSuite()">
+        <div class="err" id="g-err"></div>
+        <button class="btn btn-p" id="g-resume-btn" onclick="resumeSuite()"><i class="ti ti-history"></i> Continue</button>
+        <div class="gate-alt">First time here? <button type="button" class="linklike" onclick="setGateMode('start')">Start the assessments</button></div>
+    ` : `
         <h2>Let’s get started</h2>
         <p>Enter your details so we can save your progress across all ${ASSESS.length} assessments.</p>
         <div class="row2">
@@ -284,9 +327,9 @@ function render() {
         <input id="g-team" type="text" value="${esc(ST.teamCode)}" autocomplete="off" onkeydown="if(event.key==='Enter')startSuite()">
         <div class="err" id="g-err"></div>
         <button class="btn btn-p" onclick="startSuite()"><i class="ti ti-arrow-right"></i> Begin</button>
-      </div>
-      ${powered()}
-    </div>`;
+        <div class="gate-alt">Already started? <button type="button" class="linklike" onclick="setGateMode('resume')">Continue where you left off</button></div>
+    `;
+    app.innerHTML = `<div class="wrap">${header}<div class="gate">${body}</div>${powered()}</div>`;
     return;
   }
 
