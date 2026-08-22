@@ -1771,7 +1771,7 @@ function rComplete(){
 }
 
 /* ══ MODALS ══ */
-function rMod(){if(!S.modal)return'';const t=S.modal.type;if(t==='new_or_import')return rNewOrImportMod();if(t==='import_progress')return rImportProgressMod();if(t==='import_result')return rImportResultMod();if(t==='q')return rQMod();if(t==='sec')return rSecMod();if(t==='dim')return rDimMod();if(t==='r')return rRMod();if(t==='folder')return S.folderModal?rFolderModal():'';return '';}
+function rMod(){if(!S.modal)return'';const t=S.modal.type;if(t==='new_or_import')return rNewOrImportMod();if(t==='import_progress')return rImportProgressMod();if(t==='import_result')return rImportResultMod();if(t==='q')return rQMod();if(t==='sec')return rSecMod();if(t==='dim')return rDimMod();if(t==='r')return rRMod();if(t==='variants')return rVariantsMod();if(t==='folder')return S.folderModal?rFolderModal():'';return '';}
 
 /* ── QUESTION MODAL ── */
 function rQMod(){
@@ -3612,6 +3612,178 @@ async function sbDelete(table, query) {
   return true;
 }
 
+// ═══════════════════════════════════════════════════
+// VARIANTS — clone a source assessment (dimensions, formulas, brand,
+// webhook) and swap in a new question set from a JSON file. Used to build
+// Personal / Young Adult versions that share everything with Business
+// except the questions.
+// ═══════════════════════════════════════════════════
+
+// Pick the best source to inherit from: an assessment whose dimension NAME
+// set is identical to the import's. Prefer a "VitalSpark … Business" title.
+function matchSourceForImport(obj){
+  const names=new Set((obj.dimensions||[]).map(d=>d.name));
+  if(!names.size) return null;
+  const cands=db.assessments.filter(a=>{
+    const dn=(db.dimensions[a.id]||[]).map(d=>d.name);
+    return dn.length===names.size && dn.every(n=>names.has(n));
+  });
+  return cands.find(a=>/vitalspark/i.test(a.title)&&/business/i.test(a.title))
+      || cands.find(a=>/business/i.test(a.title))
+      || cands[0] || null;
+}
+
+// Clone `sourceId`, keep everything, replace questions with obj.questions.
+async function buildVariantFromImport(sourceId, obj, opts={}){
+  const src=db.assessments.find(a=>a.id===sourceId);
+  if(!src) throw new Error('source not found');
+  const newId=uid();
+  const srcDims=db.dimensions[sourceId]||[];
+  const srcSecs=(db.sections||{})[sourceId]||[];
+  // Clone dimensions (keep ranges/labels/recommendations); remap by name
+  const dimNameToId={}, oldDimIdToName={};
+  const dims=srcDims.map(d=>{ const nid=uid(); dimNameToId[d.name]=nid; oldDimIdToName[d.id]=d.name;
+    return {...d, id:nid, aId:newId, ranges:(d.ranges||[]).map(r=>({...r,id:uid()}))}; });
+  // Clone sections (keep classification formula + tuned formulaLabels); map by title
+  const secTitleToId={};
+  const secs=srcSecs.map(s=>{ const nid=uid(); secTitleToId[s.title]=nid;
+    return {...s, id:nid, aId:newId,
+      activeDimIds:(s.activeDimIds||[]).map(x=>dimNameToId[oldDimIdToName[x]]).filter(Boolean),
+      formulaLabels:JSON.parse(JSON.stringify(s.formulaLabels||{}))}; });
+  const firstSecId=secs[0]?.id||null;
+  // Build new questions from the import (scores keyed by dim NAME → new dim id)
+  const qs=(obj.questions||[]).map((q,i)=>({
+    id:uid(), aId:newId,
+    sectionId: q.section ? (secTitleToId[q.section]||firstSecId) : firstSecId,
+    type:q.type||'multiple_choice', title:q.title||'', description:q.description||'',
+    required:q.required!==false, orderIndex:q.orderIndex??i,
+    positionWeights:q.positionWeights||[],
+    contactFields:(q.contactFields||[]).map(f=>({id:uid(),...f})),
+    options:(q.options||[]).map(o=>({id:uid(), text:o.text||'',
+      scores:Object.fromEntries(Object.entries(o.scores||{}).map(([n,v])=>[dimNameToId[n]||n, v]))})),
+  }));
+  // Recompute maxScore per dim from the NEW questions (keeps % formulas correct)
+  dims.forEach(d=>{ let mx=0; qs.forEach(q=>{
+      if(q.type==='ranking'){ const mxW=q.positionWeights&&q.positionWeights.length?Math.max(...q.positionWeights):1;
+        (q.options||[]).forEach(o=>{ const s=Number((o.scores||{})[d.id]||0); if(s>0) mx+=s*mxW; }); }
+      else if(q.type==='multiple_choice'){ const sc=(q.options||[]).map(o=>Number((o.scores||{})[d.id]||0)); if(sc.length) mx+=Math.max(0,...sc); }
+    }); d.maxScore=mx||null; });
+  const asm={ id:newId,
+    title: opts.title || obj.assessment?.title || src.title,
+    description: (obj.assessment&&obj.assessment.description) || src.description || '',
+    status:'draft',
+    brand: JSON.parse(JSON.stringify(src.brand||{})),
+    webhookUrl: src.webhookUrl||'', webhookHeaders: src.webhookHeaders||'{"Content-Type":"application/json"}',
+    showResults: src.showResults!==false, allowRetakes: src.allowRetakes!==false,
+    createdAt: now(), folder_id: opts.folderId!==undefined?opts.folderId:null, project_id: S.projectId||null };
+  db.assessments.push(asm); db.questions[newId]=qs; db.dimensions[newId]=dims;
+  if(!db.sections) db.sections={}; db.sections[newId]=secs; db.responses[newId]=[];
+  if(_session&&_tenantId){ const errs=await syncAsm(newId,true); if(errs&&errs.length) throw new Error(errs.join('; ')); }
+  return newId;
+}
+
+// File picker → parse → auto-match sources → open the review modal
+function pickVariantFiles(){
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='.json'; inp.multiple=true;
+  inp.onchange=async function(){
+    const files=[...inp.files]; if(!files.length) return;
+    const rows=[];
+    for(const file of files){
+      try{
+        const obj=JSON.parse(await file.text());
+        const match=matchSourceForImport(obj);
+        rows.push({ name:file.name, obj, sourceId:match?match.id:'',
+          title:(obj.assessment&&obj.assessment.title)||file.name.replace(/\.json$/i,''),
+          dimCount:(obj.dimensions||[]).length, qCount:(obj.questions||[]).length, error:null });
+      }catch(e){ rows.push({ name:file.name, obj:null, sourceId:'', title:file.name, error:e.message }); }
+    }
+    S.modal={ type:'variants', rows, folderMode:'new', newFolderName:'', folderId:'', running:false, progress:'' };
+    render();
+  };
+  inp.click();
+}
+function variantSetSource(i,id){ if(S.modal&&S.modal.rows[i]) S.modal.rows[i].sourceId=id; }
+function variantSetTitle(i,v){ if(S.modal&&S.modal.rows[i]) S.modal.rows[i].title=v; }
+function variantFolderMode(m){ if(S.modal){ S.modal.folderMode=m; render(); } }
+function variantNewFolder(v){ if(S.modal) S.modal.newFolderName=v; }
+function variantSetFolder(id){ if(S.modal) S.modal.folderId=id; }
+
+async function runVariants(){
+  const m=S.modal; if(!m) return;
+  const rows=m.rows.filter(r=>r.obj && r.sourceId);
+  if(!rows.length){ toast('Nothing to build — assign a source to each file','err'); return; }
+  // Destination folder
+  let folderId=null;
+  if(m.folderMode==='new'){
+    const fname=(m.newFolderName||'').trim();
+    if(!fname){ toast('Name the destination folder','err'); return; }
+    const f={id:uid(), name:fname, project_id:S.projectId||null, instance_id:getInstanceId(), owner_id:_userId, sort_order:db.folders.length, created_at:now()};
+    try{ await sbUpsert('ab_folders',f); }catch(e){ toast('Folder save failed: '+e.message,'err'); return; }
+    db.folders.push(f); folderId=f.id; svLocal();
+  } else if(m.folderMode==='existing'){ folderId=m.folderId||null; }
+  m.running=true; render();
+  let ok=0; const errs=[];
+  for(let i=0;i<rows.length;i++){
+    m.progress=`Building ${i+1} of ${rows.length}: ${rows[i].title}`; render();
+    try{ await buildVariantFromImport(rows[i].sourceId, rows[i].obj, {title:rows[i].title, folderId}); ok++; }
+    catch(e){ errs.push(rows[i].title+': '+(e.message||e)); }
+  }
+  sv();
+  S.modal=null; S.view='home'; if(folderId) S.folderId=folderId;
+  render();
+  toast(`Built ${ok} variant${ok!==1?'s':''}`+(errs.length?` · ${errs.length} failed`:''), errs.length?'err':'ok');
+  if(errs.length) console.warn('Variant errors:', errs);
+}
+
+function rVariantsMod(){
+  const m=S.modal; if(!m||m.type!=='variants') return '';
+  const folders=db.folders.filter(f=>!S.projectId||f.project_id===S.projectId);
+  const fld='width:100%;padding:8px 10px;border:1px solid #334155;border-radius:6px;background:#0f172a;color:#e2e8f0;font-size:13px';
+  if(m.running){
+    return `<div class="mov" style="display:flex;align-items:center;justify-content:center;z-index:1000">
+      <div style="background:#1e293b;border-radius:14px;padding:34px 30px;width:420px;text-align:center">
+        <div style="width:34px;height:34px;border:3px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 16px"></div>
+        <h3 style="color:#f1f5f9;font-size:16px;margin-bottom:8px">Building variants…</h3>
+        <p style="color:#94a3b8;font-size:13px">${esc(m.progress||'')}</p>
+      </div></div>`;
+  }
+  const rowsHtml=m.rows.map((r,i)=>{
+    if(r.error) return `<div style="border:1px solid #7f1d1d;background:#450a0a;border-radius:8px;padding:10px 12px"><b style="color:#fca5a5">${esc(r.name)}</b><div style="color:#fca5a5;font-size:12px">Invalid JSON: ${esc(r.error)}</div></div>`;
+    const opts=db.assessments.map(a=>`<option value="${a.id}" ${r.sourceId===a.id?'selected':''}>${esc(a.title)}</option>`).join('');
+    return `<div style="border:1px solid #334155;border-radius:8px;padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="grid-column:1/3;font-size:11px;color:#64748b"><i class="ti ti-file-text"></i> ${esc(r.name)} · ${r.dimCount} dims · ${r.qCount} questions</div>
+      <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">New title</div>
+        <input type="text" value="${esc(r.title)}" oninput="variantSetTitle(${i},this.value)" style="${fld}"></div>
+      <div><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:4px">Inherit from ${r.sourceId?'':'<span style="color:#f59e0b">— pick a source —</span>'}</div>
+        <select onchange="variantSetSource(${i},this.value)" style="${fld}"><option value="">— none —</option>${opts}</select></div>
+    </div>`;
+  }).join('');
+  return `<div class="mov" onclick="if(event.target===this){S.modal=null;render()}" style="display:flex;align-items:flex-start;justify-content:center;z-index:1000">
+    <div class="fmod" style="max-width:640px;width:94%;background:#1e293b">
+      <div class="fx ic jb mb2">
+        <h3 style="color:#f1f5f9"><i class="ti ti-versions" style="color:#DDB84E"></i> Build variants — inherit config, swap questions</h3>
+        <button onclick="S.modal=null;render()" style="background:transparent;border:none;color:#64748b;font-size:18px;cursor:pointer"><i class="ti ti-x"></i></button>
+      </div>
+      <p style="font-size:12.5px;color:#94a3b8;margin-bottom:14px">Each new assessment copies its source's dimensions, formulas, brand &amp; webhook, then replaces the questions with the file's. Scores map by dimension name and <code>maxScore</code> is recomputed. Sources auto-matched by dimensions — adjust if needed.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;max-height:44vh;overflow-y:auto;margin-bottom:16px">${rowsHtml}</div>
+      <div style="border-top:1px solid #334155;padding-top:14px">
+        <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;margin-bottom:6px">Destination folder</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#e2e8f0;cursor:pointer"><input type="radio" name="v-fld" ${m.folderMode==='new'?'checked':''} onchange="variantFolderMode('new')"> New folder</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#e2e8f0;cursor:pointer"><input type="radio" name="v-fld" ${m.folderMode==='existing'?'checked':''} onchange="variantFolderMode('existing')" ${folders.length?'':'disabled'}> Existing</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#e2e8f0;cursor:pointer"><input type="radio" name="v-fld" ${m.folderMode==='none'?'checked':''} onchange="variantFolderMode('none')"> Unfiled</label>
+        </div>
+        ${m.folderMode==='new'?`<input type="text" placeholder="e.g. VitalSpark Personal" value="${esc(m.newFolderName)}" oninput="variantNewFolder(this.value)" style="${fld}">`:''}
+        ${m.folderMode==='existing'?`<select onchange="variantSetFolder(this.value)" style="${fld}"><option value="">— choose —</option>${folders.map(f=>`<option value="${f.id}" ${m.folderId===f.id?'selected':''}>${esc(f.name)}</option>`).join('')}</select>`:''}
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button class="btn" onclick="S.modal=null;render()" style="background:transparent;border:1px solid #334155;color:#94a3b8">Cancel</button>
+        <button class="btn bp" onclick="runVariants()"><i class="ti ti-versions"></i> Build ${m.rows.filter(r=>r.obj&&r.sourceId).length} variant(s)</button>
+      </div>
+    </div></div>`;
+}
+
 function rNewOrImportMod(){
   return '<div class="mov" onclick="if(event.target===this){S.modal=null;render()}" style="display:flex;align-items:center;justify-content:center;z-index:1000">'
     + '<div style="background:#1e293b;border-radius:14px;padding:32px 28px;width:360px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
@@ -3620,6 +3792,7 @@ function rNewOrImportMod(){
     + '<div style="display:flex;flex-direction:column;gap:10px">'
     + '<button onclick="doNewAsm()" class="btn bp" style="padding:14px 20px;font-size:14px;border-radius:8px;width:100%"><i class="ti ti-plus"></i>  Create New Assessment</button>'
     + '<button onclick="doImportAsms()" class="btn" style="padding:14px 20px;font-size:14px;border-radius:8px;width:100%;background:#334155;border:1px solid #475569;color:#e2e8f0"><i class="ti ti-upload"></i>  Import from JSON</button>'
+    + '<button onclick="S.modal=null;pickVariantFiles()" class="btn" style="padding:14px 20px;font-size:14px;border-radius:8px;width:100%;background:#334155;border:1px solid #475569;color:#e2e8f0"><i class="ti ti-versions"></i>  Build variants (same config, new questions)</button>'
     + '</div>'
     + '<button onclick="S.modal=null;render()" style="margin-top:18px;background:transparent;border:none;color:#475569;cursor:pointer;font-family:inherit;font-size:13px">Cancel</button>'
     + '</div></div>';
