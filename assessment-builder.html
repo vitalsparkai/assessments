@@ -1260,8 +1260,8 @@ function suiteViewTeamSet(v){ S.suiteViewTeam=v; render(); }
 function copyInProgressEmails(id){
   const s=(db.suites||[]).find(x=>x.id===id); if(!s) return;
   const {ids,people}=suiteRespondents(s);
-  const tf=S.suiteViewTeam||'';
-  const inTeam=p=> !tf ? true : (tf==='__none__' ? !p.team : p.team===tf);
+  const tf=(S.suiteViewTeam||'').toLowerCase();
+  const inTeam=p=> !tf ? true : (tf==='__none__' ? !p.team : (p.team||'').toLowerCase()===tf);
   const emails=people.filter(inTeam).filter(p=>(p.done.size>0||p.signedIn) && !(ids.length && p.done.size>=ids.length)).map(p=>p.email);
   if(!emails.length){ toast('No in-progress emails','err'); return; }
   copyText(emails.join(', '));
@@ -1274,11 +1274,14 @@ function rSuiteRespondents(){
   const cols=ids.map(id=>db.assessments.find(a=>a.id===id)).filter(Boolean);
   const total=ids.length;
   const statusOf=p=> (total && p.done.size>=total) ? 'complete' : ((p.done.size>0||p.signedIn) ? 'inprogress' : 'none');
-  // Team codes present among respondents
-  const teams=[...new Set(people.map(p=>p.team).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  // Team codes present among respondents — grouped case-insensitively, keeping
+  // the first-seen casing for display.
+  const teamMap={};
+  people.forEach(p=>{ if(p.team){ const k=p.team.toLowerCase(); if(!teamMap[k]) teamMap[k]=p.team; } });
+  const teams=Object.keys(teamMap).sort((a,b)=>teamMap[a].localeCompare(teamMap[b]));
   const hasNoTeam=people.some(p=>!p.team);
-  const teamF=S.suiteViewTeam||'';
-  const inTeam=p=> !teamF ? true : (teamF==='__none__' ? !p.team : p.team===teamF);
+  const teamF=(S.suiteViewTeam||'').toLowerCase();
+  const inTeam=p=> !teamF ? true : (teamF==='__none__' ? !p.team : (p.team||'').toLowerCase()===teamF);
   // Population after applying the team filter (drives counts + table)
   const population=people.filter(inTeam);
   const filtered=population
@@ -1290,7 +1293,7 @@ function rSuiteRespondents(){
   const shortT=t=>{ t=t.replace(/^VitalSpark\s+/i,'').replace(/\s+Assessment$/i,''); return t.length>16?t.slice(0,15)+'…':t; };
   const teamSelect=(teams.length||hasNoTeam)?`<select onchange="suiteViewTeamSet(this.value)" title="Filter by team code" style="width:auto;padding:6px 10px;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:7px;font-size:13px">
       <option value="">All teams</option>
-      ${teams.map(t=>`<option value="${esc(t)}" ${teamF===t?'selected':''}>${esc(t)}</option>`).join('')}
+      ${teams.map(k=>`<option value="${esc(k)}" ${teamF===k?'selected':''}>${esc(teamMap[k])}</option>`).join('')}
       ${hasNoTeam?`<option value="__none__" ${teamF==='__none__'?'selected':''}>(no team code)</option>`:''}
     </select>`:'';
   return `<div class="content">
