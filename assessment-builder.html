@@ -1221,6 +1221,19 @@ function suiteStats(suite){
   return {total, complete, inProgress};
 }
 
+// Extract an email from a response's contact object regardless of the field
+// label ("Email", "Email Address", etc.) — different assessments label it
+// differently.
+function contactEmail(c){
+  if(!c || typeof c!=='object') return '';
+  for(const k of ['Email','email','Email Address','email address','Email address']){
+    if(c[k]) return String(c[k]).trim().toLowerCase();
+  }
+  for(const k in c){ if(/e-?mail/i.test(k) && c[k]) return String(c[k]).trim().toLowerCase(); }
+  for(const k in c){ const v=c[k]; if(typeof v==='string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.trim())) return v.trim().toLowerCase(); }
+  return '';
+}
+
 // Per-respondent breakdown: one entry per person (by email) with the set of
 // assessments they've completed within the suite.
 function suiteRespondents(suite){
@@ -1230,7 +1243,7 @@ function suiteRespondents(suite){
   ids.forEach(aid=>{
     (db.responses[aid]||[]).forEach(r=>{
       const c=r.contact||{};
-      const em=((c.Email||c.email)||'').trim().toLowerCase();
+      const em=contactEmail(c);
       if(!em) return;
       const p=get(em);
       p.done.add(aid);
